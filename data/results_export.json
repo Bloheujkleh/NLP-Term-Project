@@ -1,0 +1,119 @@
+{
+  "settings": {
+    "corpus_path": "C:\\Users\\bulent\\Desktop\\NLP\\data\\corpus_index.jsonl",
+    "EMBED_MODEL_NAME": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "DENSE_MODEL_PATH": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "GEN_MODEL_NAME": "google/flan-t5-small",
+    "GEN_MODEL_PATH": "google/flan-t5-small",
+    "CROSS_ENCODER_PATH": "",
+    "USE_LLM": false,
+    "USE_RERANKER": false,
+    "USE_CROSS_ENCODER": false,
+    "RETRIEVE_K": 10,
+    "EVAL_K": 10
+  },
+  "counts": {
+    "documents": 13594,
+    "chunks": 33719,
+    "eval_total": 150,
+    "eval_valid": 150,
+    "retrieval_eval_valid": 12,
+    "eval_skipped": 150
+  },
+  "retrieval_metrics": {
+    "BM25": {
+      "Recall@5": 0.9166666666666666,
+      "Recall@10": 1.0,
+      "MRR": 0.6972222222222223,
+      "nDCG@10": 0.7696119053384006
+    },
+    "Dense": {
+      "Recall@5": 0.5833333333333334,
+      "Recall@10": 0.75,
+      "MRR": 0.39166666666666666,
+      "nDCG@10": 0.4775164112518369
+    },
+    "Hybrid": {
+      "Recall@5": 0.9166666666666666,
+      "Recall@10": 1.0,
+      "MRR": 0.6160714285714286,
+      "nDCG@10": 0.7098460223556571
+    }
+  },
+  "answer_metrics": {
+    "EM": 0.0,
+    "TokenF1": 0.30693087475201775,
+    "BLEU1": 0.2520146941149424,
+    "ROUGE-L": 0.27190866692598664
+  },
+  "groundedness_metrics": {
+    "Faithfulness": 1.0,
+    "CitationAccuracy": 0.0
+  },
+  "ablation": [
+    {
+      "name": "Baseline(Hybrid, Extractive)",
+      "Recall@5": 0.9166666666666666,
+      "Recall@10": 1.0,
+      "MRR": 0.6160714285714286,
+      "nDCG@10": 0.7098460223556571,
+      "TokenF1": 0.30693087475201775
+    },
+    {
+      "name": "+LexicalReranker",
+      "Recall@5": 0.9166666666666666,
+      "Recall@10": 1.0,
+      "MRR": 0.6577380952380952,
+      "nDCG@10": 0.7406018762247023,
+      "TokenF1": 0.30689132160181315
+    },
+    {
+      "name": "+CrossEncoderReranker",
+      "Recall@5": 0.9166666666666666,
+      "Recall@10": 1.0,
+      "MRR": 0.6160714285714286,
+      "nDCG@10": 0.7098460223556571,
+      "TokenF1": 0.30693087475201775
+    },
+    {
+      "name": "+Lexical+CrossEncoder",
+      "Recall@5": 0.9166666666666666,
+      "Recall@10": 1.0,
+      "MRR": 0.6577380952380952,
+      "nDCG@10": 0.7406018762247023,
+      "TokenF1": 0.30689132160181315
+    },
+    {
+      "name": "+LLM",
+      "Recall@5": 0.9166666666666666,
+      "Recall@10": 1.0,
+      "MRR": 0.6160714285714286,
+      "nDCG@10": 0.7098460223556571,
+      "TokenF1": 0.1760819840884932
+    },
+    {
+      "name": "+Lexical+LLM",
+      "Recall@5": 0.9166666666666666,
+      "Recall@10": 1.0,
+      "MRR": 0.6577380952380952,
+      "nDCG@10": 0.7406018762247023,
+      "TokenF1": 0.17422476740521253
+    },
+    {
+      "name": "+CrossEncoder+LLM",
+      "Recall@5": 0.9166666666666666,
+      "Recall@10": 1.0,
+      "MRR": 0.6160714285714286,
+      "nDCG@10": 0.7098460223556571,
+      "TokenF1": 0.1760819840884932
+    },
+    {
+      "name": "+Lexical+CrossEncoder+LLM",
+      "Recall@5": 0.9166666666666666,
+      "Recall@10": 1.0,
+      "MRR": 0.6577380952380952,
+      "nDCG@10": 0.7406018762247023,
+      "TokenF1": 0.17422476740521253
+    }
+  ]
+}
