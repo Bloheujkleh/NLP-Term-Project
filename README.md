@@ -56,6 +56,8 @@ python scripts/train_embedding_model.py --epochs 1 --batch-size 16
 python scripts/evaluate_retrieval.py --retriever dense --embedding-model outputs/models/legal_embedding_triplet
 ```
 
+On the local CPU-only machine, full triplet fine-tuning was also run with `batch-size 4` and `max-seq-length 256`. The fine-tuned dense model scored lower than the base dense model, so the demo keeps BM25 as the primary retriever. See `docs/step3_embedding_tuning.md`.
+
 ## Step 2: Baseline RAG Answers
 
 This creates source-grounded extractive baseline answers from the retrieved context.
@@ -79,6 +81,12 @@ For the instructor demo, use the dependency-light browser demo:
 
 ```bash
 python scripts/demo_app.py --data-dir data
+```
+
+On Windows, the same demo can be launched with:
+
+```bash
+run_demo.bat
 ```
 
 Then open:

@@ -15,6 +15,8 @@
 - [x] Faithfulness proxy
 - [x] Hallucination/error analysis section
 - [x] Embedding fine-tuning script
+- [x] Full embedding fine-tuning run on CPU
+- [x] Fine-tuned embedding evaluation on full retrieval benchmark
 - [x] Reranker evaluation script
 - [x] Reranker fine-tuning script
 - [x] LLM/SFT data identified
@@ -28,9 +30,7 @@
 
 ## Still Recommended
 
-- [ ] Run full embedding fine-tuning on GPU
 - [ ] Run full cross-encoder reranker fine-tuning on GPU
 - [ ] Add a stronger Turkish-capable LLM generator
 - [ ] Add LLM-as-judge faithfulness evaluation
-- [ ] Push repository to GitHub
 - [ ] Record GPU type and training time if GPU experiments are run

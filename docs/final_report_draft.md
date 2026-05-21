@@ -126,7 +126,7 @@ Evaluation was performed on a 100-query subset due to CPU-only inference cost.
 
 The pretrained reranker hurts performance. This indicates domain mismatch: the reranker was trained for general passage ranking, not Turkish legal ranking. This result supports the requirement for cross-encoder fine-tuning using `reranker.jsonl`.
 
-### 6.3 Embedding Tuning Smoke Test
+### 6.3 Embedding Tuning Experiment
 
 A triplet-loss embedding fine-tuning script was implemented using `embedding.jsonl`.
 
@@ -136,14 +136,25 @@ Training triple:
 query, positive_passage, hard_negative_passage
 ```
 
-A small CPU smoke test used only 64 triples to verify the training and evaluation workflow. It is not a final optimized embedding result.
+First, a small CPU smoke test used only 64 triples to verify the training and evaluation workflow.
 
 | Model | Recall@5 | Recall@10 | MRR | nDCG@10 |
 |---|---:|---:|---:|---:|
 | Base dense model, first 50 queries | 0.820 | 0.900 | 0.738 | 0.776 |
 | Smoke fine-tuned model, 64 triples | 0.840 | 0.880 | 0.725 | 0.762 |
 
-The smoke run confirms that the training pipeline works end to end. Full training should be run on all 2,059 triples with GPU support.
+The smoke run confirmed that the training pipeline works end to end.
+
+A full CPU fine-tuning run was then executed using all 2,059 embedding triples. The local PyTorch installation did not expose a CUDA device, so the run used `batch_size=4`, `max_seq_length=256`, and one epoch. Training took 2,471 seconds and reached training loss 3.257.
+
+Full benchmark evaluation:
+
+| Dense model | Recall@5 | Recall@10 | MRR | nDCG@10 |
+|---|---:|---:|---:|---:|
+| Base multilingual MiniLM | 0.613 | 0.676 | 0.518 | 0.556 |
+| CPU triplet fine-tuned model | 0.539 | 0.591 | 0.456 | 0.488 |
+
+The full CPU fine-tuning run degraded dense retrieval quality. This is an important ablation result: fine-tuning is not automatically beneficial, especially when the base model, negative sampling, objective, sequence length, and validation strategy are not tuned for Turkish legal retrieval. Therefore, the final demo system keeps BM25 as the primary retriever.
 
 ### 6.4 QA and Grounding Evaluation
 
@@ -194,13 +205,14 @@ python scripts/train_cross_encoder_reranker.py --epochs 1 --batch-size 8
 
 ## 9. Hardware and Limitations
 
-The local environment used for these experiments is CPU-only. CUDA is not available. Because of this, full cross-encoder fine-tuning and large LLM fine-tuning were prepared as reproducible scripts but not fully executed locally.
+The local environment used for these experiments is CPU-only. CUDA is not available. Because of this, full embedding fine-tuning was run with a smaller CPU configuration, while full cross-encoder fine-tuning and large LLM fine-tuning were prepared as reproducible scripts but not fully executed locally.
 
 Limitations:
 
 - The current answer generator is extractive, not a final fine-tuned LLM.
 - Pretrained reranking was evaluated on 100 queries due to CPU inference cost.
-- Full embedding and reranker fine-tuning should be run on GPU.
+- CPU embedding fine-tuning degraded dense retrieval, so the final demo uses BM25.
+- Full reranker and LLM fine-tuning should be run on GPU.
 - LLM-based faithfulness judging is not yet included; the current faithfulness score is a lexical proxy.
 
 ## 10. Conclusion
@@ -209,5 +221,4 @@ The project establishes a reproducible Turkish legal RAG pipeline with retrieval
 
 The strongest current system is BM25-based retrieval with extractive grounded answers. BM25 achieves 0.975 Recall@10 on the retrieval benchmark and 0.908 Top-5 source hit on the gold QA benchmark.
 
-The experiments also reveal clear optimization directions. Generic dense embeddings underperform lexical retrieval, and a pretrained general-domain reranker hurts performance. Therefore, domain adaptation through embedding fine-tuning and reranker fine-tuning is necessary for the optimized final system.
-
+The experiments also reveal clear optimization directions. Generic dense embeddings underperform lexical retrieval, a naive CPU triplet fine-tuning run further degrades dense retrieval, and a pretrained general-domain reranker hurts performance. Therefore, future optimized systems should use carefully validated domain adaptation rather than assuming that fine-tuning alone will improve the pipeline.

@@ -9,3 +9,7 @@ checkpoints/
 outputs/
 outputs/index/
 outputs/models/
+
+# Local demo runtime files
+.demo_server.pid
+*.log
