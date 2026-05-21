@@ -72,3 +72,12 @@ python scripts/analyze_qa_errors.py --input outputs/qa_eval.json
 ```
 
 Outputs are written under `outputs/`.
+
+## Final Deliverables
+
+Generated submission files are under `deliverables/`:
+
+- `Turkish_Legal_RAG_Final_Report.docx`
+- `Turkish_Legal_RAG_Presentation.pptx`
+
+Supporting report and presentation source notes are under `docs/`.

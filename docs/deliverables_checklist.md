@@ -20,6 +20,8 @@
 - [x] LLM/SFT data identified
 - [x] 10-15 page report draft
 - [x] 15-minute presentation outline
+- [x] Final report DOCX generated
+- [x] Final presentation PPTX generated
 
 ## Still Recommended
 
@@ -27,7 +29,5 @@
 - [ ] Run full cross-encoder reranker fine-tuning on GPU
 - [ ] Add a stronger Turkish-capable LLM generator
 - [ ] Add LLM-as-judge faithfulness evaluation
-- [ ] Create final PowerPoint slides
 - [ ] Push repository to GitHub
 - [ ] Record GPU type and training time if GPU experiments are run
-
