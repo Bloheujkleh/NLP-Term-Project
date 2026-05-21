@@ -1,151 +1,74 @@
-# Turkish Legal QA Baseline RAG (Local)
+# Turkish Legal RAG - CENG493
 
-This project is a beginner-friendly baseline Retrieval-Augmented Generation (RAG) system for Turkish legal question answering.
+This repository contains a step-by-step implementation of a Turkish legal question answering system with Retrieval-Augmented Generation (RAG).
 
-It supports:
-- BM25 retrieval (`rank-bm25`)
-- Dense retrieval (`sentence-transformers` + `FAISS`)
-- Hybrid retrieval (Reciprocal Rank Fusion / RRF)
-- Local answer generation (`transformers`)
-- Evaluation with retrieval + answer metrics
+## Data
 
-## Project Structure
+Expected dataset directory:
 
 ```text
-NLP/
-├─ data/
-│  ├─ corpus.jsonl            # Dummy corpus
-│  ├─ real_corpus.jsonl       # Built real corpus (generated)
-│  └─ kaggle_export/          # Put local Kaggle exported files here (optional)
-├─ src/
-│  ├─ data_loader.py          # Build unified corpus from Kaggle + HuggingFace
-│  ├─ ingest.py               # Load + chunk corpus
-│  ├─ retriever.py            # BM25, Dense, Hybrid(RRF)
-│  ├─ generator.py            # Local answer generator
-│  ├─ metrics.py              # Recall@5, Recall@10, MRR, EM, token F1
-│  └─ demo.py                 # End-to-end demo
-└─ requirements.txt
+Datasets_Ceng493_legal_rag/
+  corpus.jsonl
+  embedding.jsonl
+  gold_benchmark.json
+  llm.jsonl
+  rag_eval.json
+  reranker.jsonl
 ```
 
-## Data Sources
+## Step 1: Baseline Retrieval
 
-The pipeline is designed for these instructor datasets:
-1. Kaggle: `batuhankalem/turkish-law-dataset-for-llm-finetuning`
-2. HuggingFace: `Renicames/turkish-law-chatbot`
-
-### Kaggle Usage (Local Export)
-
-1. Download/export Kaggle dataset files locally.
-2. Place them under:
-   - `data/kaggle_export/`
-3. Supported input formats:
-   - `.json`, `.jsonl`, `.csv`, `.txt`
-
-### HuggingFace Usage
-
-`src/data_loader.py` downloads `Renicames/turkish-law-chatbot` with the `datasets` library.
-
-## Setup
+Dense retrieval:
 
 ```bash
-python -m venv .venv
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python scripts/evaluate_retrieval.py --retriever dense --top-k 10
 ```
 
-## Run Demo
+BM25 retrieval:
 
 ```bash
-python src/demo.py
+python scripts/evaluate_retrieval.py --retriever bm25 --top-k 10
 ```
 
-If you want a larger evaluation set first (150 questions):
+Hybrid retrieval:
 
 ```bash
-python src/build_eval_set.py
-python src/demo.py
+python scripts/evaluate_retrieval.py --retriever hybrid --top-k 10
 ```
 
-## Final submission pipeline (recommended)
-
-This reduces optimistic overlap by evaluating on HF **test** questions while indexing **train+Kaggle** only:
+BM25 + cross-encoder reranking:
 
 ```bash
-python src/build_corpus_index.py
-python src/build_eval_set.py
-python src/demo.py
+python scripts/evaluate_reranker.py --candidate-k 50 --top-k 10
 ```
 
-Optional fine-tuning (GPU recommended):
+Optional cross-encoder fine-tuning:
 
 ```bash
-python src/train_embedding_contrastive.py --out_dir models/st-legal-multilingual-v1
-python src/train_reranker_cross_encoder.py --out_dir models/ce-legal-v1
-python src/train_lora_flan_t5.py --out_dir models/flan-t5-small-lora-legal
+python scripts/train_cross_encoder_reranker.py --epochs 1 --batch-size 8
+python scripts/evaluate_reranker.py --reranker-model outputs/models/legal_cross_encoder_reranker
 ```
 
-Then run evaluation with local artifacts:
+Optional embedding fine-tuning:
 
-```powershell
-$env:DENSE_MODEL_PATH="models/st-legal-multilingual-v1"
-$env:CROSS_ENCODER_PATH="models/ce-legal-v1"
-$env:GEN_MODEL_PATH="models/flan-t5-small-lora-legal"
-python src/demo.py
+```bash
+python scripts/train_embedding_model.py --epochs 1 --batch-size 16
+python scripts/evaluate_retrieval.py --retriever dense --embedding-model outputs/models/legal_embedding_triplet
 ```
 
-`demo.py` does:
-1. Build/load `data/real_corpus.jsonl`
-2. Chunk corpus
-3. Build BM25 and Dense retrievers
-4. Retrieve top-k for a sample Turkish legal question
-5. Fuse rankings with RRF (Hybrid)
-6. Generate final answer from retrieved contexts
-7. Print retrieval/answer/groundedness metrics
-8. Save all metrics to `data/results_export.json`
+## Step 2: Baseline RAG Answers
 
-## Retrieval Methods (Simple Explanation)
+This creates source-grounded extractive baseline answers from the retrieved context.
 
-- **BM25**: keyword-based retrieval. Strong when question terms appear in the law text.
-- **Dense Retrieval**: embedding-based semantic retrieval. Helps when wording differs.
-- **Hybrid (RRF)**: combines BM25 and Dense rankings for more robust top results.
+```bash
+python scripts/run_baseline_rag.py --retriever hybrid --top-k 5 --limit 20
+```
 
-## RAG Flow
+Richer QA evaluation with citation and faithfulness proxy metrics:
 
-1. User question
-2. Retrieve relevant legal chunks (BM25/Dense/Hybrid)
-3. Send top contexts + question to local generation model
-4. Generate answer constrained by retrieved context
+```bash
+python scripts/evaluate_qa.py --retriever bm25 --generation-mode extractive --top-k 5
+python scripts/analyze_qa_errors.py --input outputs/qa_eval.json
+```
 
-Prompt rule in generator:
-- "Answer the question using only the provided legal context. If the answer is not contained in the context, say that the information is insufficient."
-
-## Evaluation
-
-### Retrieval
-- Recall@5
-- Recall@10
-- MRR
-- nDCG@10
-
-### Answer Quality (tiny manual demo set)
-- Exact Match (EM)
-- Token-level F1
-- BLEU-1 (lightweight)
-- ROUGE-L (lightweight)
-
-### Groundedness
-- Faithfulness (heuristic token coverage over retrieved context)
-- CitationAccuracy (whether retrieved ids include a gold source id)
-
-### Ablation (in `demo.py`)
-- Baseline (Hybrid + extractive)
-- +Reranker
-- +LLM
-- +Reranker + LLM
-
-## Notes
-
-- Fully local pipeline, no paid APIs.
-- First run can take time due to model downloads.
-- If real datasets are not available, code falls back to available local corpora.
+Outputs are written under `outputs/`.
