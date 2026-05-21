@@ -73,6 +73,41 @@ python scripts/analyze_qa_errors.py --input outputs/qa_eval.json
 
 Outputs are written under `outputs/`.
 
+## Live Demo
+
+For the instructor demo, use the dependency-light browser demo:
+
+```bash
+python scripts/demo_app.py --data-dir data
+```
+
+Then open:
+
+```text
+http://127.0.0.1:7860
+```
+
+Reliable demo questions for the included small corpus:
+
+```text
+Kasten oldurme sucu nedir?
+Adil yargilanma hakki nasil guvence altina alinir?
+Evlilik birligi temelinden sarsilirsa ne olur?
+```
+
+The demo shows:
+
+- the generated grounded answer,
+- the retrieved source passages,
+- the citation/source label,
+- and the headline evaluation metrics.
+
+Terminal-only fallback:
+
+```bash
+python scripts/demo_cli.py --data-dir data --question "Kasten oldurme sucu nedir?"
+```
+
 ## Final Deliverables
 
 Generated submission files are under `deliverables/`:

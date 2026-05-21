@@ -22,6 +22,9 @@
 - [x] 15-minute presentation outline
 - [x] Final report DOCX generated
 - [x] Final presentation PPTX generated
+- [x] Live browser demo script
+- [x] Terminal demo fallback
+- [x] Demo runbook
 
 ## Still Recommended
 

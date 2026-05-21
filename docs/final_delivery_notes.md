@@ -13,10 +13,11 @@
 - The final report DOCX was generated and structurally checked with `python-docx`.
 - The final presentation PPTX was generated and rendered to 10 PNG previews through artifact-tool.
 - The presentation contact sheet was visually inspected.
+- The live browser demo was started locally and returned HTTP 200.
+- The terminal demo was tested with a sample legal question.
 
 ## Environment Limitation
 
 The local machine is CPU-only and has no CUDA device. Full embedding fine-tuning and cross-encoder reranker fine-tuning are included as reproducible scripts, but final GPU training results were not run locally.
 
 LibreOffice/soffice was not available in this environment, so DOCX-to-PNG visual rendering could not be completed for the report. The DOCX was generated successfully and structurally checked.
-
