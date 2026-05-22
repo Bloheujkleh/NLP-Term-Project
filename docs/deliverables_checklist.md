@@ -26,6 +26,9 @@
 - [x] LLM/SFT smoke training script
 - [x] LLM/SFT CPU smoke run
 - [x] Local fine-tuned generator QA smoke evaluation
+- [x] Controlled ablation summary
+- [x] Code evidence map
+- [x] Fast local smoke test
 - [x] 10-15 page report draft
 - [x] 15-minute presentation outline
 - [x] Final report DOCX generated

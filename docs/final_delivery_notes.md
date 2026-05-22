@@ -24,6 +24,9 @@
 - Base FLAN-T5-small and SFT FLAN-T5-small were evaluated under the same BM25 top-3 generation pipeline on the same 20-question QA smoke set.
 - The fine-tuned local generator was evaluated on a 20-question QA smoke set.
 - Controlled ablation notes were added in `docs/controlled_ablation_summary.md`.
+- A code evidence map was added in `docs/code_evidence_map.md`.
+- The fast local smoke test passed with `python scripts\smoke_test.py --data-dir data`.
+- The CLI demo was verified with `python scripts\demo_cli.py --data-dir data --question "Kasten oldurme sucu nedir?"`.
 
 ## Environment Limitation
 

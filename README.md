@@ -126,6 +126,12 @@ Terminal-only fallback:
 python scripts/demo_cli.py --data-dir data --question "Kasten oldurme sucu nedir?"
 ```
 
+Fast local health check before the demo:
+
+```bash
+python scripts/smoke_test.py --data-dir data
+```
+
 ## Judge-Based Faithfulness
 
 After QA evaluation, run the local multilingual judge:
@@ -148,3 +154,5 @@ Supporting report and presentation source notes are under `docs/`.
 For exact commands and measured local outputs, see `docs/reproducibility_evidence.md`.
 
 For before/after component comparisons, see `docs/controlled_ablation_summary.md`.
+
+For a map from project claims to implementation files, see `docs/code_evidence_map.md`.

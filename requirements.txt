@@ -6,4 +6,7 @@ scikit-learn
 sentence-transformers
 torch
 tqdm
-
+transformers
+datasets
+accelerate
+python-docx
