@@ -23,6 +23,9 @@
 - [x] Full reranker fine-tuning run on CPU
 - [x] Fine-tuned reranker evaluation on full retrieval benchmark
 - [x] LLM/SFT data identified
+- [x] LLM/SFT smoke training script
+- [x] LLM/SFT CPU smoke run
+- [x] Local fine-tuned generator QA smoke evaluation
 - [x] 10-15 page report draft
 - [x] 15-minute presentation outline
 - [x] Final report DOCX generated
@@ -33,5 +36,5 @@
 
 ## Still Recommended
 
-- [ ] Add a stronger Turkish-capable LLM generator
+- [ ] Add a stronger Turkish-capable LLM generator for the live demo
 - [ ] Record GPU type and training time if GPU experiments are run

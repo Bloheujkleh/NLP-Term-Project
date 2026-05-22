@@ -60,6 +60,14 @@ python scripts/evaluate_retrieval.py --retriever dense --embedding-model outputs
 
 On the local CPU-only machine, full triplet fine-tuning was also run with `batch-size 4` and `max-seq-length 256`. The fine-tuned dense model scored lower than the base dense model, so the demo keeps BM25 as the primary retriever. See `docs/step3_embedding_tuning.md`.
 
+Optional seq2seq generator SFT smoke:
+
+```bash
+python scripts/train_seq2seq_generator.py --limit 512 --eval-size 64 --epochs 1 --batch-size 2 --grad-accum 8
+```
+
+The CPU smoke run verifies the `llm.jsonl` training path, but the final demo uses the extractive generator because it is more reliable for citations.
+
 ## Step 2: Baseline RAG Answers
 
 This creates source-grounded extractive baseline answers from the retrieved context.

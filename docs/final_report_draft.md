@@ -193,6 +193,24 @@ The judge compares each generated answer against the top retrieved source text a
 
 The judge score is lower than the lexical proxy, which is expected because semantic entailment is stricter than token overlap. It still indicates that most generated answers are grounded in the retrieved source.
 
+### 6.6 LLM/SFT Smoke Experiment
+
+The dataset includes 13,758 source-grounded instruction-tuning examples in `llm.jsonl`. A CPU-safe seq2seq fine-tuning script was added in `scripts/train_seq2seq_generator.py` to verify that the LLM training path works end to end.
+
+The smoke run used `google/flan-t5-small` with 512 examples, one epoch, batch size 2, gradient accumulation 8, max input length 512, and max target length 160. It trained 448 examples and evaluated on 64 examples.
+
+| Model | Train examples | Eval examples | Runtime | Train loss | Eval loss |
+|---|---:|---:|---:|---:|---:|
+| FLAN-T5-small SFT smoke | 448 | 64 | 629 sec | 7.368 | 0.514 |
+
+The fine-tuned smoke generator was then evaluated on 20 gold QA examples with BM25 retrieval:
+
+| Generator | EM | Token F1 | ROUGE-L | Citation Accuracy | Faithfulness Proxy |
+|---|---:|---:|---:|---:|---:|
+| FLAN-T5-small SFT smoke | 0.000 | 0.103 | 0.075 | 0.000 | 0.616 |
+
+This confirms that the LLM/SFT pipeline works, but the small CPU-trained model is not strong enough for the final demo. The final system therefore keeps the extractive grounded generator for reliability and citation correctness.
+
 ## 7. Error Analysis
 
 Error analysis on the 240-question gold benchmark found:
@@ -222,6 +240,7 @@ python scripts/evaluate_retrieval.py --retriever hybrid --dense-weight 0.35 --to
 python scripts/evaluate_qa.py --retriever bm25 --generation-mode extractive --top-k 5 --output outputs/qa_eval_extractive_bm25_full.json
 python scripts/evaluate_llm_judge.py --input outputs/qa_eval_extractive_bm25_full.json --provider nli --output outputs/nli_judge_faithfulness_full.json
 python scripts/evaluate_reranker.py --reranker-model outputs/models/legal_cross_encoder_reranker_full_cpu_128 --candidate-k 50 --top-k 10 --batch-size 16 --max-length 128 --output outputs/reranker_eval_finetuned_full_cpu_128_full.json
+python scripts/train_seq2seq_generator.py --limit 512 --eval-size 64 --epochs 1 --batch-size 2 --grad-accum 8 --max-input-length 512 --max-target-length 160 --output-dir outputs/models/flan_t5_legal_sft_smoke_512 --metrics-output outputs/llm_sft_smoke_512_metrics.json
 python scripts/analyze_qa_errors.py --input outputs/qa_eval_extractive_bm25_full.json --output outputs/qa_error_analysis.md
 ```
 
@@ -241,7 +260,8 @@ Limitations:
 - The current answer generator is extractive, not a final fine-tuned LLM.
 - CPU embedding fine-tuning degraded dense retrieval, so the final demo uses BM25.
 - CPU reranker fine-tuning improved over the pretrained reranker but still did not beat BM25.
-- Full LLM fine-tuning should be run on GPU.
+- CPU FLAN-T5 SFT smoke training worked, but the generated answers were too weak for the final demo.
+- Full LLM fine-tuning should be run on GPU with a stronger Turkish-capable instruction model.
 
 ## 10. Conclusion
 
@@ -249,4 +269,4 @@ The project establishes a reproducible Turkish legal RAG pipeline with retrieval
 
 The strongest current system is BM25-based retrieval with extractive grounded answers. BM25 achieves 0.975 Recall@10 on the retrieval benchmark and 0.908 Top-5 source hit on the gold QA benchmark.
 
-The experiments also reveal clear optimization directions. Generic dense embeddings underperform lexical retrieval, a naive CPU triplet fine-tuning run further degrades dense retrieval, and a pretrained general-domain reranker hurts performance. Fine-tuning the reranker improves it substantially, but the direct BM25 ranking remains strongest on this benchmark. Therefore, future optimized systems should use carefully validated domain adaptation rather than assuming that fine-tuning alone will improve the pipeline.
+The experiments also reveal clear optimization directions. Generic dense embeddings underperform lexical retrieval, a naive CPU triplet fine-tuning run further degrades dense retrieval, and a pretrained general-domain reranker hurts performance. Fine-tuning the reranker improves it substantially, but the direct BM25 ranking remains strongest on this benchmark. A small CPU LLM SFT smoke run verifies the generator training path but is not reliable enough for live use. Therefore, future optimized systems should use carefully validated domain adaptation rather than assuming that fine-tuning alone will improve the pipeline.
