@@ -116,6 +116,16 @@ Terminal-only fallback:
 python scripts/demo_cli.py --data-dir data --question "Kasten oldurme sucu nedir?"
 ```
 
+## Judge-Based Faithfulness
+
+After QA evaluation, run the local multilingual judge:
+
+```bash
+python scripts/evaluate_llm_judge.py --input outputs/qa_eval_extractive_bm25_full.json --provider nli --output outputs/nli_judge_faithfulness_full.json
+```
+
+The reported run judged 206 of 240 answers as supported by their retrieved source, for a judge faithfulness score of 0.858.
+
 ## Final Deliverables
 
 Generated submission files are under `deliverables/`:

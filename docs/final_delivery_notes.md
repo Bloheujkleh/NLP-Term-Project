@@ -17,6 +17,7 @@
 - The terminal demo was tested with a sample legal question.
 - Full embedding fine-tuning was run on CPU using all 2,059 embedding triples.
 - The fine-tuned embedding model was evaluated on the full 1,000-query retrieval benchmark.
+- LLM/NLI judge faithfulness evaluation was run on all 240 gold QA examples.
 
 ## Environment Limitation
 

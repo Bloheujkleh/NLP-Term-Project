@@ -13,6 +13,7 @@
 - [x] QA metrics: EM, F1, ROUGE-L
 - [x] Citation accuracy
 - [x] Faithfulness proxy
+- [x] LLM/NLI judge faithfulness evaluation
 - [x] Hallucination/error analysis section
 - [x] Embedding fine-tuning script
 - [x] Full embedding fine-tuning run on CPU
@@ -32,5 +33,4 @@
 
 - [ ] Run full cross-encoder reranker fine-tuning on GPU
 - [ ] Add a stronger Turkish-capable LLM generator
-- [ ] Add LLM-as-judge faithfulness evaluation
 - [ ] Record GPU type and training time if GPU experiments are run

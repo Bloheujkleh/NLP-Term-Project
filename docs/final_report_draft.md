@@ -166,6 +166,22 @@ The current QA baseline retrieves top-5 chunks with BM25 and returns an extracti
 
 The faithfulness proxy is high because the baseline answer is extractive and directly uses retrieved source text. However, answer quality and citation accuracy are limited by whether the correct source is ranked first.
 
+### 6.5 LLM/NLI Judge Faithfulness
+
+To add a semantic grounding check beyond token overlap, a judge-based faithfulness evaluator was implemented in `scripts/evaluate_llm_judge.py`. The script supports an optional API-based LLM judge, a local FLAN-T5 judge, and a local multilingual NLI judge. Because no API key was available and FLAN-T5-small was unreliable for Turkish legal text, the final run used:
+
+```text
+MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli
+```
+
+The judge compares each generated answer against the top retrieved source text and predicts whether the answer is entailed by that source.
+
+| Judge | Examples | Supported | Rejected | Faithfulness |
+|---|---:|---:|---:|---:|
+| Multilingual NLI judge | 240 | 206 | 34 | 0.858 |
+
+The judge score is lower than the lexical proxy, which is expected because semantic entailment is stricter than token overlap. It still indicates that most generated answers are grounded in the retrieved source.
+
 ## 7. Error Analysis
 
 Error analysis on the 240-question gold benchmark found:
@@ -193,6 +209,7 @@ python scripts/evaluate_retrieval.py --retriever bm25 --top-k 10 --output output
 python scripts/evaluate_retrieval.py --retriever dense --top-k 10 --output outputs/retrieval_eval_dense_full.json
 python scripts/evaluate_retrieval.py --retriever hybrid --dense-weight 0.35 --top-k 10 --output outputs/retrieval_eval_hybrid_full.json
 python scripts/evaluate_qa.py --retriever bm25 --generation-mode extractive --top-k 5 --output outputs/qa_eval_extractive_bm25_full.json
+python scripts/evaluate_llm_judge.py --input outputs/qa_eval_extractive_bm25_full.json --provider nli --output outputs/nli_judge_faithfulness_full.json
 python scripts/analyze_qa_errors.py --input outputs/qa_eval_extractive_bm25_full.json --output outputs/qa_error_analysis.md
 ```
 
