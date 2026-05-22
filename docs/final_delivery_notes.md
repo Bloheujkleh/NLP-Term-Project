@@ -27,6 +27,8 @@
 - A code evidence map was added in `docs/code_evidence_map.md`.
 - The fast local smoke test passed with `python scripts\smoke_test.py --data-dir data`.
 - The CLI demo was verified with `python scripts\demo_cli.py --data-dir data --question "Kasten oldurme sucu nedir?"`.
+- The optional local generative LLM path was connected to the browser and CLI demos with `--answer-mode local_hf`.
+- The local fine-tuned FLAN-T5 demo path was verified from CLI.
 
 ## Environment Limitation
 

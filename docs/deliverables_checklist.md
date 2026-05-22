@@ -35,6 +35,7 @@
 - [x] Final presentation PPTX generated
 - [x] Live browser demo script
 - [x] Terminal demo fallback
+- [x] Optional local HF generative demo mode
 - [x] Demo runbook
 
 ## Still Recommended

@@ -26,6 +26,22 @@ If the browser app fails for any reason, use the CLI fallback:
 python scripts/demo_cli.py --data-dir data --question "Kasten oldurme sucu nedir?"
 ```
 
+## Optional Generative LLM Demo
+
+The default browser demo uses the reliable extractive grounded generator. To show that a real local LLM path is also connected, run:
+
+```bash
+python scripts/demo_app.py --data-dir data --answer-mode local_hf --generation-model outputs/models/flan_t5_legal_sft_smoke_512
+```
+
+CLI check:
+
+```bash
+python scripts/demo_cli.py --data-dir data --question "Kasten oldurme sucu nedir?" --answer-mode local_hf --generation-model outputs/models/flan_t5_legal_sft_smoke_512
+```
+
+Use this as an optional demonstration only. The FLAN-T5 smoke model is CPU fine-tuned and small, so the final answer quality is weaker than the extractive mode.
+
 ## Recommended Demo Questions
 
 Use these with the included small corpus because they retrieve clean sources:
@@ -63,3 +79,4 @@ Full benchmark results from the project:
 - The pretrained general-domain reranker hurt ranking, but CPU legal-domain fine-tuning improved it strongly.
 - The fine-tuned reranker still did not beat direct BM25 on the full benchmark.
 - LLM/SFT smoke training was run with FLAN-T5-small, but generated citation quality was too weak for the live demo.
+- The optional `local_hf` demo mode loads the fine-tuned FLAN-T5 checkpoint and applies citation guardrails.

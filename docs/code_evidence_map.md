@@ -32,9 +32,11 @@ This file maps the main project claims to the code that implements them. It is i
 | Claim | Code |
 |---|---|
 | Browser demo is a working source-grounded QA system. | `scripts/demo_app.py` |
+| Browser demo can run either extractive answers or the local fine-tuned FLAN-T5 generator. | `scripts/demo_app.py` |
 | CLI fallback returns answer and sources without a browser. | `scripts/demo_cli.py` |
+| CLI fallback can run the same optional local FLAN-T5 generator path. | `scripts/demo_cli.py` |
 | Fast smoke test checks corpus loading, BM25 retrieval, citation output, and metric sanity. | `scripts/smoke_test.py` |
 
 ## Important Limitation
 
-The live demo intentionally uses the reliable extractive grounded generator. The generative FLAN-T5 path exists and was fine-tuned/evaluated as a smoke experiment, but it is not the deployed demo path because citation accuracy remained weak.
+The default live demo intentionally uses the reliable extractive grounded generator. The generative FLAN-T5 path is also connected through `--answer-mode local_hf` and was fine-tuned/evaluated as a smoke experiment, but it is not the recommended demo path because citation accuracy remained weak.

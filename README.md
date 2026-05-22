@@ -126,6 +126,18 @@ Terminal-only fallback:
 python scripts/demo_cli.py --data-dir data --question "Kasten oldurme sucu nedir?"
 ```
 
+Optional local generative LLM demo with the CPU fine-tuned FLAN-T5 smoke checkpoint:
+
+```bash
+python scripts/demo_app.py --data-dir data --answer-mode local_hf --generation-model outputs/models/flan_t5_legal_sft_smoke_512
+```
+
+CLI version of the same generative path:
+
+```bash
+python scripts/demo_cli.py --data-dir data --question "Kasten oldurme sucu nedir?" --answer-mode local_hf --generation-model outputs/models/flan_t5_legal_sft_smoke_512
+```
+
 Fast local health check before the demo:
 
 ```bash

@@ -37,7 +37,8 @@ Evlilik birligi temelinden sarsilirsa ne olur?
 - Reranker fine-tuning was run on CPU with all 6,752 pairs.
 - It improved strongly over the pretrained reranker, but still did not beat BM25 on the full benchmark.
 - FLAN-T5 SFT smoke training was run with `llm.jsonl`.
-- The small CPU model was not citation-reliable enough for the final demo.
+- The browser and CLI demos now support an optional `local_hf` answer mode using the fine-tuned FLAN-T5 smoke checkpoint.
+- The small CPU model is shown as an optional LLM path, while the default extractive mode remains the recommended legal demo because it is more citation-reliable.
 
 ## Best Closing Line
 

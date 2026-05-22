@@ -29,7 +29,7 @@ class Doc:
 
 
 def tokenize(text: str) -> list[str]:
-    return re.findall(r"[a-zA-ZçğıöşüÇĞİÖŞÜ0-9]+", text.lower())
+    return re.findall(r"\w+", text.lower(), flags=re.UNICODE)
 
 
 def iter_jsonl(path: Path):
@@ -103,14 +103,79 @@ class SimpleBM25:
         return [(self.docs[idx], score) for idx, score in scores[:top_k]]
 
 
-def make_answer(results: list[tuple[Doc, float]]) -> str:
-    if not results:
-        return "Bu soru için kaynak bulunamadı."
-    best = results[0][0]
-    return f"Kaynağa göre: {best.text}\n\nKaynak: {best.citation}"
+class AnswerGenerator:
+    def generate(self, question: str, results: list[tuple[Doc, float]]) -> str:
+        raise NotImplementedError
 
 
-def page(question: str = "", answer: str = "", results: list[tuple[Doc, float]] | None = None) -> bytes:
+class ExtractiveGenerator(AnswerGenerator):
+    def generate(self, question: str, results: list[tuple[Doc, float]]) -> str:
+        if not results:
+            return "Bu soru icin kaynak bulunamadi."
+        best = results[0][0]
+        return f"Kaynaga gore: {best.text}\n\nKaynak: {best.citation}"
+
+
+class LocalHFGenerator(AnswerGenerator):
+    def __init__(self, model_name: str, max_new_tokens: int = 128) -> None:
+        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+        self.model_name = model_name
+        self.max_new_tokens = max_new_tokens
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+
+    @staticmethod
+    def build_prompt(question: str, results: list[tuple[Doc, float]]) -> str:
+        context = "\n\n".join(
+            f"[{rank}] Baslik: {doc.title}\nKaynak: {doc.citation}\nMetin: {doc.text}"
+            for rank, (doc, _score) in enumerate(results, start=1)
+        )
+        return (
+            "Sen bir Turk hukuku RAG asistanisin. Yalnizca verilen kaynaklara dayanarak "
+            "kisa ve dogru cevap ver. Kaynakta olmayan bilgiyi uretme.\n\n"
+            f"Kaynaklar:\n{context}\n\n"
+            f"Soru: {question}\n\n"
+            "Cevap:"
+        )
+
+    @staticmethod
+    def clean_answer(answer: str, fallback_doc: Doc) -> str:
+        answer = answer.strip()
+        answer = re.sub(r"^\s*Soru:\s*", "", answer, flags=re.IGNORECASE)
+        answer = re.split(r"\[\d+\]\s*Baslik:|\n\s*Baslik:|\n\s*Metin:", answer, maxsplit=1)[0].strip()
+        answer = re.sub(r"\s+", " ", answer).strip()
+        if len(answer.split()) < 5:
+            answer = fallback_doc.text
+        if "Kaynak:" not in answer:
+            answer = f"{answer}\n\nKaynak: {fallback_doc.citation}"
+        return answer
+
+    def generate(self, question: str, results: list[tuple[Doc, float]]) -> str:
+        if not results:
+            return "Bu soru icin kaynak bulunamadi."
+        prompt = self.build_prompt(question, results)
+        inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024)
+        output_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens, do_sample=False)
+        answer = self.tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
+        return self.clean_answer(answer, results[0][0])
+
+
+def build_generator(answer_mode: str, generation_model: str | None, max_new_tokens: int) -> AnswerGenerator:
+    if answer_mode == "extractive":
+        return ExtractiveGenerator()
+    if not generation_model:
+        raise ValueError("--generation-model is required when --answer-mode local_hf")
+    return LocalHFGenerator(generation_model, max_new_tokens=max_new_tokens)
+
+
+def page(
+    question: str = "",
+    answer: str = "",
+    results: list[tuple[Doc, float]] | None = None,
+    answer_mode: str = "extractive",
+    generation_model: str | None = None,
+) -> bytes:
     results = results or []
     sample_buttons = "".join(
         f"<button name='question' value='{html.escape(q)}'>{html.escape(q)}</button>" for q in SAMPLE_QUESTIONS
@@ -126,6 +191,7 @@ def page(question: str = "", answer: str = "", results: list[tuple[Doc, float]] 
         """
         for rank, (doc, score) in enumerate(results, start=1)
     )
+    model_line = f" | <strong>Model:</strong> {html.escape(generation_model)}" if generation_model else ""
     body = f"""<!doctype html>
 <html lang="tr">
 <head>
@@ -157,7 +223,7 @@ def page(question: str = "", answer: str = "", results: list[tuple[Doc, float]] 
 <body>
   <header>
     <h1>Turkish Legal RAG Demo</h1>
-    <p>BM25 retrieval + source-grounded extractive answer + citations</p>
+    <p>BM25 retrieval + source-grounded answer + citations</p>
   </header>
   <main>
     <section class="metrics">
@@ -166,6 +232,7 @@ def page(question: str = "", answer: str = "", results: list[tuple[Doc, float]] 
       <div class="metric"><strong>0.908</strong>Top-5 source hit</div>
       <div class="metric"><strong>0.813</strong>Citation accuracy</div>
     </section>
+    <section class="panel"><strong>Answer mode:</strong> {html.escape(answer_mode)}{model_line}</section>
     <section class="panel">
       <form method="post" action="/ask">
         <label for="question"><strong>Legal question</strong></label>
@@ -182,24 +249,24 @@ def page(question: str = "", answer: str = "", results: list[tuple[Doc, float]] 
     return body.encode("utf-8")
 
 
-def build_handler(retriever: SimpleBM25):
+def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode: str, generation_model: str | None):
     class DemoHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(page())
+            self.wfile.write(page(answer_mode=answer_mode, generation_model=generation_model))
 
         def do_POST(self) -> None:
             length = int(self.headers.get("Content-Length", "0"))
             payload = self.rfile.read(length).decode("utf-8")
             question = parse_qs(payload).get("question", [""])[0].strip()
             results = retriever.search(question, top_k=5) if question else []
-            answer = make_answer(results) if question else ""
+            answer = generator.generate(question, results) if question else ""
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(page(question, answer, results))
+            self.wfile.write(page(question, answer, results, answer_mode=answer_mode, generation_model=generation_model))
 
         def log_message(self, format: str, *args) -> None:
             return
@@ -214,15 +281,25 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=7860)
+    parser.add_argument("--answer-mode", choices=["extractive", "local_hf"], default="extractive")
+    parser.add_argument("--generation-model", default=None)
+    parser.add_argument("--max-new-tokens", type=int, default=128)
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
 
     corpus_file = args.corpus_file or resolve_corpus_file(args.data_dir)
     docs = load_docs(corpus_file, limit=args.limit)
     retriever = SimpleBM25(docs)
-    server = ThreadingHTTPServer((args.host, args.port), build_handler(retriever))
+    generator = build_generator(args.answer_mode, args.generation_model, args.max_new_tokens)
+    server = ThreadingHTTPServer(
+        (args.host, args.port),
+        build_handler(retriever, generator, args.answer_mode, args.generation_model),
+    )
     url = f"http://{args.host}:{args.port}"
     print(f"Loaded {len(docs)} documents from {corpus_file}")
+    print(f"Answer mode: {args.answer_mode}")
+    if args.generation_model:
+        print(f"Generation model: {args.generation_model}")
     print(f"Demo running at {url}")
     if not args.no_browser:
         webbrowser.open(url)
