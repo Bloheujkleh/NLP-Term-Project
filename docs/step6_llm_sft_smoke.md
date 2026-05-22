@@ -70,8 +70,15 @@ python scripts/evaluate_qa.py \
 | Citation accuracy | 0.000 |
 | Faithfulness proxy | 0.616 |
 
+For a controlled before/after comparison, the base `google/flan-t5-small` model was also evaluated on the same 20 examples:
+
+| Generator | Token F1 | ROUGE-L | Citation Accuracy | Faithfulness Proxy |
+|---|---:|---:|---:|---:|
+| Base FLAN-T5-small | 0.076 | 0.056 | 0.000 | 0.452 |
+| SFT smoke FLAN-T5-small | 0.103 | 0.075 | 0.000 | 0.616 |
+
 ## Interpretation
 
-The smoke experiment verifies the LLM fine-tuning pipeline, model saving, and local generation path. However, the small CPU-trained FLAN-T5 model is not strong enough for the final demo: it produces weak answers and does not reliably preserve citations.
+The smoke experiment verifies the LLM fine-tuning pipeline, model saving, and local generation path. The SFT model improves over the base model under the same pipeline, but the small CPU-trained FLAN-T5 model is not strong enough for the final demo: it produces weak answers and does not reliably preserve citations.
 
 Therefore, the final demo keeps the extractive source-grounded generator. For a production-quality generative answerer, the next step is GPU-based fine-tuning of a stronger Turkish-capable instruction model and stricter citation-format training.

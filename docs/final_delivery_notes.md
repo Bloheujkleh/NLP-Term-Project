@@ -21,10 +21,12 @@
 - Full cross-encoder reranker fine-tuning was run on CPU using all 6,752 reranker pairs.
 - The fine-tuned reranker was evaluated on the full 1,000-query retrieval benchmark.
 - A CPU-safe FLAN-T5 SFT smoke run was completed using `llm.jsonl`.
+- Base FLAN-T5-small and SFT FLAN-T5-small were evaluated under the same BM25 top-3 generation pipeline on the same 20-question QA smoke set.
 - The fine-tuned local generator was evaluated on a 20-question QA smoke set.
+- Controlled ablation notes were added in `docs/controlled_ablation_summary.md`.
 
 ## Environment Limitation
 
-The local PyTorch installation is CPU-only and has no CUDA device. Full embedding and cross-encoder reranker fine-tuning were executed on CPU. Embedding fine-tuning degraded dense retrieval compared with the base multilingual MiniLM model. Reranker fine-tuning improved over the pretrained reranker but did not beat the direct BM25 ranking. A small CPU FLAN-T5 SFT smoke run was completed, but it was not strong enough for the live demo. Large LLM fine-tuning should be run on GPU.
+The local PyTorch installation is CPU-only and has no CUDA device. Full embedding and cross-encoder reranker fine-tuning were executed on CPU. Embedding fine-tuning degraded dense retrieval compared with the base multilingual MiniLM model. Reranker fine-tuning improved over the pretrained reranker but did not beat the direct BM25 ranking. A small CPU FLAN-T5 SFT smoke run improved over the base FLAN-T5-small under the same pipeline, but it was not strong enough for the live demo because citation accuracy remained 0.000. Large LLM fine-tuning should be run on GPU.
 
 LibreOffice/soffice was not available in this environment, so DOCX-to-PNG visual rendering could not be completed for the report. The DOCX was generated successfully and structurally checked.

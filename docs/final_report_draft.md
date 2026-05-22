@@ -207,9 +207,10 @@ The fine-tuned smoke generator was then evaluated on 20 gold QA examples with BM
 
 | Generator | EM | Token F1 | ROUGE-L | Citation Accuracy | Faithfulness Proxy |
 |---|---:|---:|---:|---:|---:|
+| Base FLAN-T5-small | 0.000 | 0.076 | 0.056 | 0.000 | 0.452 |
 | FLAN-T5-small SFT smoke | 0.000 | 0.103 | 0.075 | 0.000 | 0.616 |
 
-This confirms that the LLM/SFT pipeline works, but the small CPU-trained model is not strong enough for the final demo. The final system therefore keeps the extractive grounded generator for reliability and citation correctness.
+This confirms that the LLM/SFT pipeline works and that fine-tuning improves the same base model under the same generation pipeline. However, the small CPU-trained model is still not strong enough for the final demo. The final system therefore keeps the extractive grounded generator for reliability and citation correctness.
 
 ## 7. Error Analysis
 

@@ -153,6 +153,23 @@ Judge faithfulness 0.858
 
 ## LLM/SFT Smoke
 
+Base FLAN-T5-small QA check:
+
+```bash
+python scripts/evaluate_qa.py --data-dir C:\Users\bulent\Documents\Codex\2026-05-21\nlp-or\Datasets_Ceng493_legal_rag --retriever bm25 --generation-mode local_hf --generation-model google/flan-t5-small --top-k 3 --limit 20 --max-new-tokens 96 --output outputs\qa_eval_local_hf_base_flan_20.json
+```
+
+Result:
+
+```text
+Token F1 0.076
+ROUGE-L 0.056
+Citation Accuracy 0.000
+Faithfulness Proxy 0.452
+```
+
+Fine-tuning command:
+
 ```bash
 python scripts/train_seq2seq_generator.py --data-dir C:\Users\bulent\Documents\Codex\2026-05-21\nlp-or\Datasets_Ceng493_legal_rag --limit 512 --eval-size 64 --epochs 1 --batch-size 2 --grad-accum 8 --max-input-length 512 --max-target-length 160 --output-dir outputs\models\flan_t5_legal_sft_smoke_512 --metrics-output outputs\llm_sft_smoke_512_metrics.json
 ```
@@ -177,6 +194,7 @@ Result:
 
 ```text
 Token F1 0.103
+ROUGE-L 0.075
 Citation Accuracy 0.000
 Faithfulness Proxy 0.616
 ```

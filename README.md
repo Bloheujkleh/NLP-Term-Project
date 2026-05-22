@@ -146,3 +146,5 @@ Generated submission files are under `deliverables/`:
 Supporting report and presentation source notes are under `docs/`.
 
 For exact commands and measured local outputs, see `docs/reproducibility_evidence.md`.
+
+For before/after component comparisons, see `docs/controlled_ablation_summary.md`.
