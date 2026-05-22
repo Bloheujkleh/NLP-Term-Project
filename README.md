@@ -144,3 +144,5 @@ Generated submission files are under `deliverables/`:
 - `Turkish_Legal_RAG_Presentation.pptx`
 
 Supporting report and presentation source notes are under `docs/`.
+
+For exact commands and measured local outputs, see `docs/reproducibility_evidence.md`.
