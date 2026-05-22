@@ -1,47 +1,55 @@
-# Next Steps
+# Remaining Next Steps
 
-## Step 2 - Reranker
+Most implementation and experiment work for the course submission has been completed. This file only lists optional future improvements beyond the current demo-ready project.
 
-Train or load a cross-encoder reranker using `reranker.jsonl`, then evaluate:
+## Current Completed Status
 
-- BM25 top-50 candidates
-- Cross-encoder rerank to top-10
-- Compare Recall@5, Recall@10, MRR, nDCG@10 against Step 1
+| Area | Status |
+|---|---|
+| Baseline RAG | Complete |
+| BM25, dense, hybrid retrieval | Complete |
+| Retrieval metrics | Complete |
+| QA metrics and citation accuracy | Complete |
+| Error analysis | Complete |
+| Embedding fine-tuning | Full CPU run completed |
+| Reranker fine-tuning | Full CPU run completed |
+| Judge faithfulness | Full 240-example run completed |
+| LLM/SFT training path | 512-example CPU smoke run completed |
+| Browser demo | Complete |
+| Report and deliverables | Complete |
 
-Status: pretrained reranker evaluation is implemented. Full fine-tuning is recommended on GPU because no CUDA device is available in the current environment.
+## Optional Future Work
 
-## Step 3 - Embedding Tuning
+### Stronger Generative LLM
 
-Use `embedding.jsonl` for contrastive fine-tuning:
+The current live demo uses extractive source-grounded answers because it is reliable and citation-safe. A future version can fine-tune a stronger Turkish-capable instruction model on `llm.jsonl` using GPU hardware.
 
-- Query
-- Positive passage
-- Hard negative passage
+Recommended evaluation:
 
-Then rebuild the FAISS index and compare dense retrieval before and after tuning.
+- QA token F1 / ROUGE-L
+- Citation accuracy
+- NLI or LLM judge faithfulness
+- Manual hallucination review
 
-Status: training and evaluation scripts are implemented. A CPU smoke run succeeded, but full training is recommended on GPU.
+### Better Dense Retrieval
 
-## Step 4 - LLM Answer Generation
+The CPU triplet-tuned dense retriever did not improve over the base multilingual MiniLM model. Future work should try:
 
-Use `llm.jsonl` for instruction tuning or as prompt examples:
+- stronger Turkish or multilingual legal embedding models
+- validation split for early stopping
+- improved hard-negative mining
+- longer sequence length on GPU
+- multiple loss functions beyond the current simple triplet setup
 
-- Source-grounded answers
-- Short summaries with citation
-- Source-limited explanations
+### Reranker Deployment
 
-The evaluation should include EM/F1 plus citation accuracy and hallucination analysis.
+The fine-tuned reranker improved strongly over the pretrained reranker, but did not beat direct BM25 on the full benchmark. Future work can test:
 
-Status: QA generation/evaluation script is implemented with extractive and optional local HuggingFace modes. Error analysis is generated from the full 240-question gold benchmark.
+- different candidate counts
+- longer max sequence length
+- calibration with BM25 score interpolation
+- reranker only on queries where BM25 confidence is low
 
-## Step 5 - Final Optimized Pipeline
+## Final Demo Recommendation
 
-Recommended final comparison table:
-
-| System | Recall@10 | MRR | QA F1 | Citation Accuracy | Faithfulness |
-|---|---:|---:|---:|---:|---:|
-| Baseline RAG | | | | | |
-| + Embedding tuning | | | | | |
-| + Reranker | | | | | |
-| + LLM fine-tuning | | | | | |
-| Fully optimized | | | | | |
+For submission/demo, use the current BM25 + extractive grounded answer system. It is the most reliable measured configuration and gives auditable citations in the browser UI.
