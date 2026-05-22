@@ -145,7 +145,7 @@ function slide04() {
     addText(slide, s, x + 12, 312, 156, 34, { size: 18, bold: true, color: C.ink, fill: i === 1 ? "#E8F1FB" : C.pale, line: i === 1 ? "#E8F1FB" : C.pale, align: "center" });
     if (i < steps.length - 1) addBox(slide, x + 184, 327, 46, 4, C.gold, C.gold);
   });
-  addText(slide, "Implemented: BM25, dense MiniLM, hybrid retrieval, pretrained reranker evaluation, embedding/reranker training scripts, QA metrics.", 120, 470, 1040, 70, { size: 22, color: C.text, fill: C.white, line: C.white, align: "center" });
+  addText(slide, "Implemented: BM25, dense MiniLM, hybrid retrieval, embedding fine-tuning, reranker fine-tuning, LLM/SFT smoke training, QA metrics, and judge-based faithfulness.", 120, 470, 1040, 70, { size: 20, color: C.text, fill: C.white, line: C.white, align: "center" });
   footer(slide, 4);
 }
 
@@ -163,24 +163,22 @@ function slide05() {
 
 function slide06() {
   const slide = deck.slides.add();
-  title(slide, "Reranker", "A general-domain multilingual reranker hurts ranking quality.");
-  metricCard(slide, 120, 230, 260, 120, "1.000", "BM25 first-stage Recall@10", C.green);
-  metricCard(slide, 440, 230, 260, 120, "0.810", "Pretrained reranker Recall@10", C.red);
-  metricCard(slide, 760, 230, 260, 120, "0.550", "Pretrained reranker MRR", C.red);
-  addText(slide, "Conclusion: the reranker has domain mismatch. The project includes a cross-encoder fine-tuning script using reranker.jsonl.", 150, 440, 900, 92, { size: 24, bold: true, color: C.ink, fill: "#FFF1F0", line: "#FDA29B", align: "center" });
+  title(slide, "Reranker", "Legal-domain fine-tuning fixes much of the pretrained mismatch.");
+  metricCard(slide, 90, 225, 240, 120, "0.810", "Pretrained Recall@10, 100q", C.red);
+  metricCard(slide, 365, 225, 240, 120, "0.970", "Fine-tuned Recall@10, 100q", C.green);
+  metricCard(slide, 640, 225, 240, 120, "0.915", "Fine-tuned Recall@10, 1000q", C.blue);
+  metricCard(slide, 915, 225, 240, 120, "0.975", "BM25 Recall@10, 1000q", C.green);
+  addText(slide, "Conclusion: reranker fine-tuning works, but raw BM25 remains strongest on the full benchmark, so the live demo keeps BM25 ranking.", 150, 440, 900, 92, { size: 22, bold: true, color: C.ink, fill: "#EAF7F1", line: "#A6D8BF", align: "center" });
   footer(slide, 6);
 }
 
 function slide07() {
   const slide = deck.slides.add();
-  title(slide, "Embedding Tuning", "Dense retrieval needs Turkish legal domain adaptation.");
-  addText(slide, "Training signal", 90, 220, 260, 34, { size: 20, bold: true, color: C.blue });
-  ["query", "positive passage", "hard negative passage"].forEach((t, i) => {
-    addBox(slide, 100 + i * 330, 300, 250, 70, C.pale, C.line);
-    addText(slide, t, 118 + i * 330, 320, 214, 30, { size: 18, bold: true, color: C.ink, fill: C.pale, line: C.pale, align: "center" });
-    if (i < 2) addBox(slide, 358 + i * 330, 332, 56, 4, C.gold, C.gold);
-  });
-  addText(slide, "Implemented: triplet-loss fine-tuning script. CPU smoke run confirms train/save/load/index/evaluate works end to end.", 140, 475, 930, 70, { size: 22, color: C.ink, fill: C.white, line: C.white, align: "center" });
+  title(slide, "Embedding Tuning", "Dense fine-tuning must be validated, not assumed to help.");
+  metricCard(slide, 130, 235, 250, 120, "0.676", "Base dense Recall@10", C.blue);
+  metricCard(slide, 445, 235, 250, 120, "0.591", "CPU triplet tuned Recall@10", C.red);
+  metricCard(slide, 760, 235, 250, 120, "41 min", "CPU training runtime", C.gold);
+  addText(slide, "Result: the naive triplet setup degraded dense retrieval. This is a useful ablation and justifies keeping BM25 in the final demo.", 145, 455, 900, 84, { size: 23, bold: true, color: C.ink, fill: "#FFF1F0", line: "#FDA29B", align: "center" });
   footer(slide, 7);
 }
 
@@ -191,7 +189,7 @@ function slide08() {
   metricCard(slide, 330, 230, 210, 120, "0.908", "Top-5 source hit", C.green);
   metricCard(slide, 570, 230, 210, 120, "0.813", "Citation accuracy", C.gold);
   metricCard(slide, 810, 230, 210, 120, "0.961", "Faithfulness proxy", C.green);
-  addText(slide, "Because the baseline cites the top-1 source, citation accuracy tracks top-1 source hit.", 160, 455, 860, 64, { size: 22, bold: true, color: C.ink, fill: "#F6F8FA", line: C.line, align: "center" });
+  addText(slide, "Judge-based faithfulness adds a stricter semantic check: 206 of 240 answers were source-supported, score 0.858.", 160, 455, 860, 64, { size: 22, bold: true, color: C.ink, fill: "#F6F8FA", line: C.line, align: "center" });
   footer(slide, 8);
 }
 
@@ -206,12 +204,12 @@ function slide09() {
 
 function slide10() {
   const slide = deck.slides.add();
-  title(slide, "Conclusion", "The project is reproducible and identifies the next optimization targets.");
+  title(slide, "Conclusion", "The project is reproducible, measured, and demo-ready.");
   const items = [
     "BM25 is the current strongest baseline.",
-    "Generic dense embeddings underperform in Turkish legal retrieval.",
-    "General-domain reranking hurts without legal fine-tuning.",
-    "Error analysis tells us where to optimize next.",
+    "Embedding and reranker fine-tuning were run and evaluated on CPU.",
+    "LLM/SFT smoke training works but is not reliable enough for live demo.",
+    "Judge faithfulness and error analysis make grounding auditable.",
   ];
   items.forEach((item, i) => {
     addBox(slide, 110, 215 + i * 85, 920, 56, i === 0 ? "#EAF7F1" : C.pale, C.line);

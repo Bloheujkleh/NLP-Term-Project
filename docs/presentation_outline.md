@@ -48,15 +48,16 @@ Main point: BM25 is very strong for legal text.
 |---|---:|---:|
 | BM25 first stage | 1.000 | 0.990 |
 | Pretrained reranker | 0.810 | 0.550 |
+| Fine-tuned reranker, 100q | 0.970 | 0.898 |
 
-Main point: general-domain reranker has domain mismatch.
+Main point: general-domain reranker has domain mismatch, and legal fine-tuning helps substantially.
 
 ## Slide 7 - Embedding Tuning
 
 - `embedding.jsonl` gives query, positive passage, hard negative passage.
-- Triplet-loss training script implemented.
-- CPU smoke run verifies training pipeline.
-- Full training should be run on GPU.
+- Full CPU triplet-loss training was run on all 2,059 triples.
+- The tuned dense model scored Recall@10 0.591 vs base dense 0.676.
+- Main point: fine-tuning must be validated; it does not automatically improve retrieval.
 
 ## Slide 8 - QA Evaluation
 
@@ -78,10 +79,10 @@ Implication:
 
 ## Slide 10 - Optimization Plan
 
-- Full embedding fine-tuning
-- Cross-encoder reranker fine-tuning
-- LLM instruction tuning with `llm.jsonl`
-- LLM-based faithfulness judge
+- Full embedding fine-tuning completed on CPU.
+- Cross-encoder reranker fine-tuning completed on CPU.
+- LLM instruction-tuning smoke run completed with `llm.jsonl`.
+- LLM/NLI judge faithfulness completed on 240 QA examples.
 
 ## Slide 11 - Reproducibility
 
@@ -92,8 +93,7 @@ Implication:
 
 ## Slide 12 - Conclusion
 
-- Built a complete baseline RAG evaluation framework.
-- BM25 is the strongest current baseline.
-- Dense and reranker results show domain adaptation is necessary.
-- Error analysis identifies where optimization should focus.
-
+- Built a complete Turkish legal RAG evaluation framework.
+- BM25 is the strongest current demo retriever.
+- Fine-tuning and judge experiments were run and measured.
+- Error analysis identifies where future optimization should focus.

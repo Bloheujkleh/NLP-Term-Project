@@ -54,11 +54,12 @@ Full benchmark results from the project:
 | QA Token F1 | 0.799 |
 | Top-5 Source Hit | 0.908 |
 | Citation Accuracy | 0.813 |
+| Judge Faithfulness | 0.858 |
 
 ## If Asked About Optimization
 
-- Dense multilingual MiniLM underperformed BM25, so embedding fine-tuning is justified.
-- A pretrained general-domain reranker hurt performance, so legal-domain reranker fine-tuning is necessary.
-- The project includes scripts for embedding and reranker fine-tuning.
-- GPU was not available locally, so full fine-tuning is documented as reproducible future/optional work.
-
+- Dense multilingual MiniLM underperformed BM25.
+- Full CPU embedding fine-tuning was run, but the naive triplet setup degraded dense retrieval, so BM25 stayed in the demo.
+- The pretrained general-domain reranker hurt ranking, but CPU legal-domain fine-tuning improved it strongly.
+- The fine-tuned reranker still did not beat direct BM25 on the full benchmark.
+- LLM/SFT smoke training was run with FLAN-T5-small, but generated citation quality was too weak for the live demo.
