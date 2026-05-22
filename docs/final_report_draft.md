@@ -103,7 +103,7 @@ The generic multilingual dense model performs substantially worse than BM25, whi
 
 The first hybrid configuration does not improve over BM25. This suggests that hybrid retrieval requires careful weighting and that adding a weak dense retriever can reduce ranking quality.
 
-### 6.2 Pretrained Reranker Experiment
+### 6.2 Reranker Experiments
 
 Pipeline:
 
@@ -125,6 +125,17 @@ Evaluation was performed on a 100-query subset due to CPU-only inference cost.
 | Pretrained cross-encoder reranker | 0.700 | 0.810 | 0.550 | 0.612 |
 
 The pretrained reranker hurts performance. This indicates domain mismatch: the reranker was trained for general passage ranking, not Turkish legal ranking. This result supports the requirement for cross-encoder fine-tuning using `reranker.jsonl`.
+
+A full CPU fine-tuning run was then performed on all 6,752 rows of `reranker.jsonl` using one epoch, batch size 4, and max sequence length 128. Training took 3,047 seconds and reached training loss 0.358.
+
+Full benchmark evaluation:
+
+| System | Queries | Recall@5 | Recall@10 | MRR | nDCG@10 |
+|---|---:|---:|---:|---:|---:|
+| BM25 first stage | 1,000 | 0.947 | 0.975 | 0.864 | 0.890 |
+| Fine-tuned reranker | 1,000 | 0.882 | 0.915 | 0.789 | 0.820 |
+
+The fine-tuned reranker substantially improves over the pretrained reranker, but it still does not beat the raw BM25 ranking. Therefore, the final demo uses BM25 directly while reporting reranker fine-tuning as an ablation.
 
 ### 6.3 Embedding Tuning Experiment
 
@@ -210,6 +221,7 @@ python scripts/evaluate_retrieval.py --retriever dense --top-k 10 --output outpu
 python scripts/evaluate_retrieval.py --retriever hybrid --dense-weight 0.35 --top-k 10 --output outputs/retrieval_eval_hybrid_full.json
 python scripts/evaluate_qa.py --retriever bm25 --generation-mode extractive --top-k 5 --output outputs/qa_eval_extractive_bm25_full.json
 python scripts/evaluate_llm_judge.py --input outputs/qa_eval_extractive_bm25_full.json --provider nli --output outputs/nli_judge_faithfulness_full.json
+python scripts/evaluate_reranker.py --reranker-model outputs/models/legal_cross_encoder_reranker_full_cpu_128 --candidate-k 50 --top-k 10 --batch-size 16 --max-length 128 --output outputs/reranker_eval_finetuned_full_cpu_128_full.json
 python scripts/analyze_qa_errors.py --input outputs/qa_eval_extractive_bm25_full.json --output outputs/qa_error_analysis.md
 ```
 
@@ -222,15 +234,14 @@ python scripts/train_cross_encoder_reranker.py --epochs 1 --batch-size 8
 
 ## 9. Hardware and Limitations
 
-The local environment used for these experiments is CPU-only. CUDA is not available. Because of this, full embedding fine-tuning was run with a smaller CPU configuration, while full cross-encoder fine-tuning and large LLM fine-tuning were prepared as reproducible scripts but not fully executed locally.
+The local environment used for these experiments is CPU-only. CUDA is not available. Because of this, full embedding and cross-encoder reranker fine-tuning were run with smaller CPU configurations, while large LLM fine-tuning was prepared as reproducible data and scripts but not fully executed locally.
 
 Limitations:
 
 - The current answer generator is extractive, not a final fine-tuned LLM.
-- Pretrained reranking was evaluated on 100 queries due to CPU inference cost.
 - CPU embedding fine-tuning degraded dense retrieval, so the final demo uses BM25.
-- Full reranker and LLM fine-tuning should be run on GPU.
-- LLM-based faithfulness judging is not yet included; the current faithfulness score is a lexical proxy.
+- CPU reranker fine-tuning improved over the pretrained reranker but still did not beat BM25.
+- Full LLM fine-tuning should be run on GPU.
 
 ## 10. Conclusion
 
@@ -238,4 +249,4 @@ The project establishes a reproducible Turkish legal RAG pipeline with retrieval
 
 The strongest current system is BM25-based retrieval with extractive grounded answers. BM25 achieves 0.975 Recall@10 on the retrieval benchmark and 0.908 Top-5 source hit on the gold QA benchmark.
 
-The experiments also reveal clear optimization directions. Generic dense embeddings underperform lexical retrieval, a naive CPU triplet fine-tuning run further degrades dense retrieval, and a pretrained general-domain reranker hurts performance. Therefore, future optimized systems should use carefully validated domain adaptation rather than assuming that fine-tuning alone will improve the pipeline.
+The experiments also reveal clear optimization directions. Generic dense embeddings underperform lexical retrieval, a naive CPU triplet fine-tuning run further degrades dense retrieval, and a pretrained general-domain reranker hurts performance. Fine-tuning the reranker improves it substantially, but the direct BM25 ranking remains strongest on this benchmark. Therefore, future optimized systems should use carefully validated domain adaptation rather than assuming that fine-tuning alone will improve the pipeline.

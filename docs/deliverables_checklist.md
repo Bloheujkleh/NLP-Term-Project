@@ -20,6 +20,8 @@
 - [x] Fine-tuned embedding evaluation on full retrieval benchmark
 - [x] Reranker evaluation script
 - [x] Reranker fine-tuning script
+- [x] Full reranker fine-tuning run on CPU
+- [x] Fine-tuned reranker evaluation on full retrieval benchmark
 - [x] LLM/SFT data identified
 - [x] 10-15 page report draft
 - [x] 15-minute presentation outline
@@ -31,6 +33,5 @@
 
 ## Still Recommended
 
-- [ ] Run full cross-encoder reranker fine-tuning on GPU
 - [ ] Add a stronger Turkish-capable LLM generator
 - [ ] Record GPU type and training time if GPU experiments are run

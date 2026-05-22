@@ -49,6 +49,8 @@ python scripts/train_cross_encoder_reranker.py --epochs 1 --batch-size 8
 python scripts/evaluate_reranker.py --reranker-model outputs/models/legal_cross_encoder_reranker
 ```
 
+On the local CPU-only machine, full reranker fine-tuning was run with `batch-size 4` and `max-length 128`. It improved strongly over the pretrained reranker, but direct BM25 ranking remained best on the full retrieval benchmark. See `docs/step2_reranker_results.md`.
+
 Optional embedding fine-tuning:
 
 ```bash

@@ -4,6 +4,7 @@ import argparse
 import math
 import sys
 from pathlib import Path
+import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -52,9 +53,11 @@ def main() -> None:
         output_path=str(args.output_dir),
         show_progress_bar=True,
     )
+    if args.output_dir.exists() and not any(args.output_dir.iterdir()):
+        shutil.rmtree(args.output_dir)
+    model.save(str(args.output_dir))
     print(f"Saved fine-tuned reranker to {args.output_dir}")
 
 
 if __name__ == "__main__":
     main()
-
