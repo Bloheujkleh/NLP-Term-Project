@@ -9,16 +9,22 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from legal_rag.data import load_corpus, load_rag_eval, write_json
 from legal_rag.metrics import ndcg_at_k, recall_at_k, reciprocal_rank
-from legal_rag.retrievers import BM25Retriever, DenseRetriever, HybridRetriever
+from legal_rag.retrievers import BM25Retriever, ChromaDBRetriever, HybridRetriever
 
 
 def build_retriever(args: argparse.Namespace, corpus):
     if args.retriever == "bm25":
         return BM25Retriever(corpus)
-    dense = DenseRetriever(
+    
+    collection_name = "baseline_rag_db"
+    if args.embedding_model and ("triplet" in args.embedding_model.lower() or "finetuned" in args.embedding_model.lower()):
+        collection_name = "finetuned_rag_db"
+
+    dense = ChromaDBRetriever(
         corpus,
         model_name=args.embedding_model,
-        cache_dir=args.index_dir,
+        persist_dir=args.index_dir.parent / "chroma_db",
+        collection_name=collection_name,
         batch_size=args.batch_size,
     )
     if args.retriever == "dense":
@@ -29,14 +35,14 @@ def build_retriever(args: argparse.Namespace, corpus):
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", type=Path, default=Path("Datasets_Ceng493_legal_rag"))
+    parser.add_argument("--data-dir", type=Path, default=Path("data"))
     parser.add_argument("--output", type=Path, default=Path("outputs/retrieval_eval.json"))
     parser.add_argument("--index-dir", type=Path, default=Path("outputs/index"))
     parser.add_argument("--retriever", choices=["dense", "bm25", "hybrid"], default="dense")
-    parser.add_argument("--embedding-model", default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    parser.add_argument("--embedding-model", default="intfloat/multilingual-e5-base")
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--candidate-k", type=int, default=50)
-    parser.add_argument("--dense-weight", type=float, default=0.65)
+    parser.add_argument("--dense-weight", type=float, default=0.5)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()

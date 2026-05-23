@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_DATA_DIR = Path("Datasets_Ceng493_legal_rag")
+DEFAULT_DATA_DIR = Path("data")
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,19 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def load_corpus(data_dir: Path = DEFAULT_DATA_DIR) -> list[CorpusDoc]:
-    rows = read_jsonl(data_dir / "corpus.jsonl")
+    corpus_files = ["real_corpus.jsonl", "corpus_index.jsonl", "corpus.jsonl"]
+    path = None
+    for filename in corpus_files:
+        p = data_dir / filename
+        if p.exists() and p.stat().st_size > 10000:
+            path = p
+            break
+    if path is None:
+        path = data_dir / "corpus.jsonl"
+        if not path.exists():
+            raise FileNotFoundError(f"No corpus file found in {data_dir}. Tried {corpus_files}")
+
+    rows = read_jsonl(path)
     docs: list[CorpusDoc] = []
     for row in rows:
         metadata = row.get("metadata") or {}
@@ -50,11 +62,44 @@ def load_corpus(data_dir: Path = DEFAULT_DATA_DIR) -> list[CorpusDoc]:
 
 
 def load_rag_eval(data_dir: Path = DEFAULT_DATA_DIR) -> list[dict[str, Any]]:
-    return read_json(data_dir / "rag_eval.json")
+    qa_jsonl_path = data_dir / "eval_qa_150.jsonl"
+    if qa_jsonl_path.exists():
+        rows = read_jsonl(qa_jsonl_path)
+        normalized = []
+        for idx, row in enumerate(rows):
+            normalized.append({
+                "query_id": f"Q_{idx}",
+                "query": row["question"],
+                "gold_chunk_ids": [row["source_id"]] if "source_id" in row else row.get("gold_chunk_ids", [])
+            })
+        return normalized
+    
+    json_path = data_dir / "rag_eval.json"
+    if json_path.exists():
+        return read_json(json_path)
+    
+    raise FileNotFoundError(f"No retrieval evaluation file found in {data_dir}. Expected eval_qa_150.jsonl or rag_eval.json.")
 
 
 def load_gold_benchmark(data_dir: Path = DEFAULT_DATA_DIR) -> list[dict[str, Any]]:
-    return read_json(data_dir / "gold_benchmark.json")
+    qa_jsonl_path = data_dir / "eval_qa_150.jsonl"
+    if qa_jsonl_path.exists():
+        rows = read_jsonl(qa_jsonl_path)
+        normalized = []
+        for idx, row in enumerate(rows):
+            normalized.append({
+                "question_id": f"Q_{idx}",
+                "question": row["question"],
+                "verified_answer": row.get("gold_answer") or row.get("verified_answer") or "",
+                "gold_sources": [{"corpus_row_id": row["source_id"]}] if "source_id" in row else row.get("gold_sources", [])
+            })
+        return normalized
+
+    json_path = data_dir / "gold_benchmark.json"
+    if json_path.exists():
+        return read_json(json_path)
+
+    raise FileNotFoundError(f"No gold benchmark file found in {data_dir}. Expected eval_qa_150.jsonl or gold_benchmark.json.")
 
 
 def ensure_dir(path: Path) -> Path:

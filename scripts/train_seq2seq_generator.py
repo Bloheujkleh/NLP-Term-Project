@@ -42,7 +42,7 @@ def row_to_pair(row: dict[str, Any]) -> tuple[str, str] | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", type=Path, default=Path("Datasets_Ceng493_legal_rag"))
+    parser.add_argument("--data-dir", type=Path, default=Path("data"))
     parser.add_argument("--model-name", default="google/flan-t5-small")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/models/flan_t5_legal_sft_smoke"))
     parser.add_argument("--metrics-output", type=Path, default=Path("outputs/llm_sft_smoke_metrics.json"))

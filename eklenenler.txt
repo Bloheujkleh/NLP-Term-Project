@@ -1,0 +1,31 @@
+PROJEYE EKLENEN VE DEĞİŞTİRİLEN BÖLÜMLER
+
+1. Veri Dizinleri ve Yol Hataları (Path Issues)
+•	İlk Hali (Sorun): Veri dizin yolları kodun içinde sabit (hardcoded) olarak Datasets_Ceng493_legal_rag gibi yerel klasörlere bakıyordu. Windows/Linux sistemleri arasında yol uyumsuzluğu vardı ve kod hata verip duruyordu.
+•	Ne Değiştirdik? src/legal_rag/data.py içinde DEFAULT_DATA_DIR yapısını dinamik olarak data/ klasörüne eşitledik.
+•	Neden? Projenin her bilgisayarda (örneğin senin sunum yapacağın bilgisayarda veya hocanın bilgisayarında) klasör yolları aranmadan doğrudan tek tıkla çalışabilmesi için.
+________________________________________
+2. Vektör Veritabanı ve Bellek Sorunu
+•	İlk Hali (Sorun): Belgeleri saklamak için profesyonel bir veritabanı yoktu. Basit bir bellek içi (in-memory) FAISS veya sözlük yapısı kullanılıyordu. Her çalıştırmada 15.094 belgenin vektörlerini sıfırdan üretmek gerekiyordu ve bu işlem CPU üzerinde yaklaşık 1.5 saat sürüyordu!
+•	Ne Ekledik? ChromaDB vektör veritabanını projeye entegre ettik (baseline_rag_db ve finetuned_rag_db adında iki ayrı koleksiyon oluşturduk). Ayrıca Embedding Önbellekleme (Cache) mekanizması yazdık. Vektörleri ilk seferde hesaplayıp pickle formatında (.pkl dosyası olarak) diske kaydettik.
+•	Neden? Bir hukukçunun veya jürinin arama yapması için 1.5 saat beklemesi kabul edilemezdi. Bu önbellek sistemi sayesinde sonraki tüm çalıştırmalarda veritabanı 1.5 saat yerine sadece 3 saniyede yüklenir hale geldi.
+________________________________________
+3. Hibrit Arama Skorlarının Birleştirilmesi (RRF)
+•	İlk Hali (Sorun): Dense (anlamsal) arama ile BM25 (kelime bazlı) aramadan gelen skorları birleştirmek için basit bir "min-max normalizasyonu" kullanılıyordu. Ancak BM25 skorları (0 ile 50 arası frekans değerleri) ile Dense arama skorları (0 ile 1 arası kosinüs benzerliği) matematiksel olarak tamamen farklı dağılımlara sahipti. Bunları doğrudan toplamak hatalı sonuçlar veriyordu.
+•	Ne Değiştirdik? Basit toplama yerine RRF (Reciprocal Rank Fusion - Karşılıklı Sıra Birleştirme) algoritmasını yazdık.
+•	Neden? RRF, belgelerin ham skorlarına değil, arama sonuçlarındaki sıralamalarına bakar. Örneğin, bir belge BM25'te 1. sırada, Dense'te 3. sıradaysa, RRF bunu ortak bir formülle birleştirir. Bu sayede ham skorların uyumsuzluğundan kaynaklanan hataları sıfırlayarak çok daha kararlı ve güçlü bir hibrit arama elde ettik.
+________________________________________
+4. Embedding Fine-Tuning Yöntemi (MNRL ve Ön Ekler)
+•	İlk Hali (Sorun): Model eğitimi için TripletLoss düşünülmüştü ancak bu kayıp fonksiyonu hem CPU'da yavaştı hem de mesafe hesaplamaları için çok hassas hiperparametre ayarları gerektiriyordu. Ayrıca E5 asimetrik embedding modelinin ön ek (prefix) kuralları koda dahil edilmemişti.
+•	Ne Değiştirdik? Kayıp fonksiyonunu MultipleNegativesRankingLoss (MNRL) olarak güncelledik. Arama sorgularına "query: " ve belgelere "passage: " ön eklerini dinamik olarak ekleyen bir yapı kurduk.
+•	Neden? MNRL, hard-negatifleri vektör uzayında çok daha hızlı ve kararlı bir şekilde doğru pasajın dışına iter. E5 modelleri ise doğası gereği bu ön eklerle eğitilmiştir; ön ek kullanılmadığında anlamsal eşleşme kalitesi ciddi derecede düşer.
+________________________________________
+5. Reranker (Yeniden Sıralayıcı) Mekanizması
+•	İlk Hali (Sorun): Reranker aşaması ilk başta kodda aktif değildi veya tam entegre edilmemişti. LLM'e (jeneratör) ilk aşamada bulunan ham sonuçlar gönderiliyordu, bu da alakasız bilgilerin modele gitmesine ve modele uydurma cevaplar (halüsinasyon) ürettirmesine yol açıyordu.
+•	Ne Ekledik? Sıfırdan bir CrossEncoderReranker sınıfı (src/legal_rag/rerankers.py) yazdık. Orijinal ön-eğitimli mmarco-mMiniLMv2 Cross-Encoder modelini RAG akışına entegre ettik.
+•	Neden? Reranker, getirilen belgeleri soruyla derinlemesine karşılaştırarak en doğrusunu en tepeye yerleştirir. Bu sayede modelin halüsinasyon oranını %33.16'dan %28.60'a indirmeyi başardık.
+________________________________________
+6. RAGAS ve Yerel Değerlendirme Çerçevesi (Evaluation Framework)
+•	İlk Hali (Sorun): RAG sisteminin sadakatini (faithfulness) ve doğruluğunu ölçmek için bir değerlendirme altyapısı yoktu. RAGAS kütüphanesi genelde ücretli OpenAI API anahtarları gerektiriyordu ve yerel CPU ortamlarında çalıştırılamıyordu.
+•	Ne Ekledik? Tamamen yerel (local) CPU üzerinde çalışan, ücretsiz bir NLI (Doğal Dil Çıkarımı) modeli (MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli) entegreli evaluate_ragas.py scripti yazdık.
+•	Neden? Projeyi tamamen açık kaynaklı, ücretsiz ve herkesin kendi bilgisayarında (GPU gerektirmeden) kolayca test edip metrik raporu alabileceği bilimsel bir düzeye taşımak için.

@@ -15,7 +15,7 @@ from legal_rag.retrievers import BM25Retriever
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", type=Path, default=Path("Datasets_Ceng493_legal_rag"))
+    parser.add_argument("--data-dir", type=Path, default=Path("data"))
     parser.add_argument("--output", type=Path, default=Path("outputs/reranker_eval_bm25_cross_encoder.json"))
     parser.add_argument("--candidate-k", type=int, default=50)
     parser.add_argument("--top-k", type=int, default=10)

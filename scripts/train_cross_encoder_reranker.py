@@ -18,7 +18,7 @@ from legal_rag.rerankers import DEFAULT_RERANKER_MODEL
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", type=Path, default=Path("Datasets_Ceng493_legal_rag"))
+    parser.add_argument("--data-dir", type=Path, default=Path("data"))
     parser.add_argument("--base-model", default=DEFAULT_RERANKER_MODEL)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/models/legal_cross_encoder_reranker"))
     parser.add_argument("--epochs", type=int, default=1)

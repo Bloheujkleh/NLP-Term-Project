@@ -41,7 +41,7 @@ def iter_jsonl(path: Path):
 
 def resolve_corpus_file(data_dir: Path) -> Path:
     candidates = [
-        Path("Datasets_Ceng493_legal_rag") / "corpus.jsonl",
+        Path("data") / "corpus.jsonl",
         data_dir / "corpus.jsonl",
         data_dir / "corpus_index.jsonl",
         data_dir / "real_corpus.jsonl",

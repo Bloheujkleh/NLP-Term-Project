@@ -18,13 +18,13 @@ from legal_rag.retrievers import DEFAULT_EMBEDDING_MODEL
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", type=Path, default=Path("Datasets_Ceng493_legal_rag"))
+    parser.add_argument("--data-dir", type=Path, default=Path("data"))
     parser.add_argument("--base-model", default=DEFAULT_EMBEDDING_MODEL)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/models/legal_embedding_triplet"))
-    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=2e-5)
-    parser.add_argument("--warmup-ratio", type=float, default=0.1)
+    parser.add_argument("--warmup-steps", type=int, default=100)
     parser.add_argument("--max-seq-length", type=int, default=384)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--limit", type=int, default=None)
@@ -36,19 +36,24 @@ def main() -> None:
     if args.limit:
         rows = rows[: args.limit]
 
-    examples = [
-        InputExample(
-            texts=[row["query"], row["positive_passage"], row["negative_passage"]]
-        )
-        for row in rows
-    ]
+    is_e5 = "e5" in args.base_model.lower()
+    examples = []
+    for row in rows:
+        q = row["query"]
+        pos = row["positive_passage"]
+        neg = row["negative_passage"]
+        if is_e5:
+            q = f"query: {q}"
+            pos = f"passage: {pos}"
+            neg = f"passage: {neg}"
+        examples.append(InputExample(texts=[q, pos, neg]))
 
     model = SentenceTransformer(args.base_model)
     model.max_seq_length = args.max_seq_length
 
     train_loader = DataLoader(examples, shuffle=True, batch_size=args.batch_size)
-    train_loss = losses.TripletLoss(model=model)
-    warmup_steps = math.ceil(len(train_loader) * args.epochs * args.warmup_ratio)
+    train_loss = losses.MultipleNegativesRankingLoss(model=model)
+    warmup_steps = args.warmup_steps
 
     model.fit(
         train_objectives=[(train_loader, train_loss)],

@@ -10,3 +10,6 @@ transformers
 datasets
 accelerate
 python-docx
+chromadb
+ragas
+
