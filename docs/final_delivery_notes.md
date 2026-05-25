@@ -29,6 +29,10 @@
 - The CLI demo was verified with `python scripts\demo_cli.py --data-dir data --question "Kasten oldurme sucu nedir?"`.
 - The optional local generative LLM path was connected to the browser and CLI demos with `--answer-mode local_hf`.
 - The local fine-tuned FLAN-T5 demo path was verified from CLI.
+- Custom corpus and benchmark support was documented in `docs/submission_custom_evaluation_guide.md`.
+- `scripts/validate_custom_data.py` was added to validate instructor-provided data folders.
+- `scripts/run_base_vs_finetuned_eval.py` was added to run Base RAG and Fine-tuned RAG on the same custom benchmark.
+- The custom sample dataset under `sample_custom_data/` was validated and evaluated successfully.
 
 ## Environment Limitation
 

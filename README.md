@@ -168,3 +168,17 @@ For exact commands and measured local outputs, see `docs/reproducibility_evidenc
 For before/after component comparisons, see `docs/controlled_ablation_summary.md`.
 
 For a map from project claims to implementation files, see `docs/code_evidence_map.md`.
+
+For instructor-provided custom documents and custom benchmarks, see `docs/submission_custom_evaluation_guide.md`.
+
+Validate a custom dataset:
+
+```bash
+python scripts/validate_custom_data.py --data-dir sample_custom_data --require-benchmark
+```
+
+Run base vs fine-tuned comparison on the same benchmark:
+
+```bash
+python scripts/run_base_vs_finetuned_eval.py --data-dir sample_custom_data --output-dir outputs/sample_submission_eval
+```

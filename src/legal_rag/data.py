@@ -37,7 +37,7 @@ def load_corpus(data_dir: Path = DEFAULT_DATA_DIR) -> list[CorpusDoc]:
     path = None
     for filename in corpus_files:
         p = data_dir / filename
-        if p.exists() and p.stat().st_size > 10000:
+        if p.exists() and p.stat().st_size > 0:
             path = p
             break
     if path is None:
@@ -62,15 +62,22 @@ def load_corpus(data_dir: Path = DEFAULT_DATA_DIR) -> list[CorpusDoc]:
 
 
 def load_rag_eval(data_dir: Path = DEFAULT_DATA_DIR) -> list[dict[str, Any]]:
-    qa_jsonl_path = data_dir / "eval_qa_150.jsonl"
-    if qa_jsonl_path.exists():
+    for filename in ["eval_qa.jsonl", "custom_benchmark.jsonl", "benchmark.jsonl", "eval_qa_150.jsonl"]:
+        qa_jsonl_path = data_dir / filename
+        if not qa_jsonl_path.exists():
+            continue
         rows = read_jsonl(qa_jsonl_path)
         normalized = []
         for idx, row in enumerate(rows):
+            question = row.get("question") or row.get("query")
+            source_id = row.get("source_id") or row.get("gold_source_id")
+            gold_ids = row.get("gold_chunk_ids") or row.get("relevant_documents") or row.get("relevant_doc_ids")
+            if isinstance(gold_ids, str):
+                gold_ids = [gold_ids]
             normalized.append({
-                "query_id": f"Q_{idx}",
-                "query": row["question"],
-                "gold_chunk_ids": [row["source_id"]] if "source_id" in row else row.get("gold_chunk_ids", [])
+                "query_id": row.get("query_id") or row.get("question_id") or f"Q_{idx}",
+                "query": question,
+                "gold_chunk_ids": [source_id] if source_id else (gold_ids or [])
             })
         return normalized
     
@@ -82,16 +89,27 @@ def load_rag_eval(data_dir: Path = DEFAULT_DATA_DIR) -> list[dict[str, Any]]:
 
 
 def load_gold_benchmark(data_dir: Path = DEFAULT_DATA_DIR) -> list[dict[str, Any]]:
-    qa_jsonl_path = data_dir / "eval_qa_150.jsonl"
-    if qa_jsonl_path.exists():
+    for filename in ["eval_qa.jsonl", "custom_benchmark.jsonl", "benchmark.jsonl", "eval_qa_150.jsonl"]:
+        qa_jsonl_path = data_dir / filename
+        if not qa_jsonl_path.exists():
+            continue
         rows = read_jsonl(qa_jsonl_path)
         normalized = []
         for idx, row in enumerate(rows):
+            question = row.get("question") or row.get("query")
+            source_id = row.get("source_id") or row.get("gold_source_id")
+            gold_sources = row.get("gold_sources")
+            if not gold_sources:
+                relevant = row.get("relevant_documents") or row.get("relevant_doc_ids") or row.get("gold_chunk_ids")
+                if isinstance(relevant, str):
+                    relevant = [relevant]
+                ids = [source_id] if source_id else (relevant or [])
+                gold_sources = [{"corpus_row_id": doc_id} for doc_id in ids]
             normalized.append({
-                "question_id": f"Q_{idx}",
-                "question": row["question"],
-                "verified_answer": row.get("gold_answer") or row.get("verified_answer") or "",
-                "gold_sources": [{"corpus_row_id": row["source_id"]}] if "source_id" in row else row.get("gold_sources", [])
+                "question_id": row.get("question_id") or row.get("query_id") or f"Q_{idx}",
+                "question": question,
+                "verified_answer": row.get("gold_answer") or row.get("verified_answer") or row.get("answer") or "",
+                "gold_sources": gold_sources,
             })
         return normalized
 

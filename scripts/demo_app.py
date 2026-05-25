@@ -41,13 +41,12 @@ def iter_jsonl(path: Path):
 
 def resolve_corpus_file(data_dir: Path) -> Path:
     candidates = [
-        Path("data") / "corpus.jsonl",
-        data_dir / "corpus.jsonl",
-        data_dir / "corpus_index.jsonl",
         data_dir / "real_corpus.jsonl",
-        Path("data") / "corpus.jsonl",
-        Path("data") / "corpus_index.jsonl",
+        data_dir / "corpus_index.jsonl",
+        data_dir / "corpus.jsonl",
         Path("data") / "real_corpus.jsonl",
+        Path("data") / "corpus_index.jsonl",
+        Path("data") / "corpus.jsonl",
     ]
     for candidate in candidates:
         if candidate.exists():

@@ -37,6 +37,10 @@
 - [x] Terminal demo fallback
 - [x] Optional local HF generative demo mode
 - [x] Demo runbook
+- [x] Custom document collection guide
+- [x] Custom benchmark evaluation guide
+- [x] Custom data schema validator
+- [x] Base RAG vs fine-tuned RAG comparison runner
 
 ## Still Recommended
 
