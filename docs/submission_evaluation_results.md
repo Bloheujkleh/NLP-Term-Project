@@ -61,6 +61,21 @@ python scripts/run_base_vs_finetuned_eval.py \
 
 Interpretation: the fine-tuned reranker did not improve this 150-question benchmark. It slightly increased lexical faithfulness but hurt source ranking and citation accuracy. Therefore, the final live demo keeps BM25 as the default retrieval configuration.
 
+Local NLI faithfulness judge was also run on both outputs:
+
+```bash
+python scripts/evaluate_ragas.py --input outputs/submission_eval_bm25_vs_finetuned_reranker/base_rag_qa.json --provider local-nli --output outputs/submission_eval_bm25_vs_finetuned_reranker/base_rag_nli_eval.json
+
+python scripts/evaluate_ragas.py --input outputs/submission_eval_bm25_vs_finetuned_reranker/finetuned_rag_qa.json --provider local-nli --output outputs/submission_eval_bm25_vs_finetuned_reranker/finetuned_rag_nli_eval.json
+```
+
+| NLI / relevance metric | Base BM25 RAG | Fine-tuned reranker RAG |
+|---|---:|---:|
+| NLI faithfulness | 0.8065 | 0.7922 |
+| Answer relevance proxy | 0.3624 | 0.2984 |
+
+Interpretation: the NLI judge also favors the base BM25 RAG output on this benchmark.
+
 ## 3. Base LLM vs Fine-Tuned LLM Smoke
 
 Same retriever, same benchmark slice, same generation pipeline:
