@@ -33,6 +33,7 @@
 - `scripts/validate_custom_data.py` was added to validate instructor-provided data folders.
 - `scripts/run_base_vs_finetuned_eval.py` was added to run Base RAG and Fine-tuned RAG on the same custom benchmark.
 - The custom sample dataset under `sample_custom_data/` was validated and evaluated successfully.
+- Latest Base RAG vs fine-tuned reranker and Base FLAN-T5 vs fine-tuned FLAN-T5 checks were recorded in `docs/submission_evaluation_results.md`.
 
 ## Environment Limitation
 

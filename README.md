@@ -171,6 +171,8 @@ For a map from project claims to implementation files, see `docs/code_evidence_m
 
 For instructor-provided custom documents and custom benchmarks, see `docs/submission_custom_evaluation_guide.md`.
 
+For the latest Base RAG vs Fine-tuned RAG checks aligned with the submission note, see `docs/submission_evaluation_results.md`.
+
 Validate a custom dataset:
 
 ```bash
