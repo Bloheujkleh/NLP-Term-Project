@@ -230,7 +230,45 @@ These results show that future improvements should target two different parts of
 - Better first-stage retrieval for the 22 retrieval failures
 - Domain-tuned reranking for the 23 ranking failures
 
-## 8. Reproducibility
+## 8. Submission Compatibility Checks
+
+The final repository includes explicit support for instructor-provided custom document collections and benchmark files. A custom corpus can be supplied as `corpus.jsonl`, `corpus_index.jsonl`, or `real_corpus.jsonl`, and each document must include at least an `id` and `text`. A custom benchmark can be supplied as `eval_qa.jsonl`, `custom_benchmark.jsonl`, or `benchmark.jsonl`, with question, gold answer, and relevant document fields.
+
+The custom data path was validated with:
+
+```bash
+python scripts/validate_custom_data.py --data-dir sample_custom_data --require-benchmark
+```
+
+Base RAG and fine-tuned RAG can be evaluated on the same corpus, same benchmark, and same answer generator with:
+
+```bash
+python scripts/run_base_vs_finetuned_eval.py --data-dir sample_custom_data --output-dir outputs/sample_submission_eval
+```
+
+On the 150-question local benchmark, a same-generator comparison was run between BM25 base RAG and BM25 plus the fine-tuned cross-encoder reranker:
+
+| Metric | Base BM25 RAG | Fine-tuned reranker RAG |
+|---|---:|---:|
+| Token F1 | 0.703 | 0.631 |
+| ROUGE-L | 0.702 | 0.621 |
+| Top-1 source hit | 0.960 | 0.620 |
+| Top-5 source hit | 0.993 | 0.900 |
+| Citation accuracy | 0.960 | 0.620 |
+| NLI faithfulness | 0.807 | 0.792 |
+
+This submission check reinforces the final design choice: the fine-tuned reranker does not improve the current benchmark, so the live demo keeps BM25 as the default retrieval strategy.
+
+A same-pipeline LLM smoke comparison was also run on 20 questions:
+
+| Generator | Token F1 | ROUGE-L | Citation Accuracy | Faithfulness Proxy |
+|---|---:|---:|---:|---:|
+| Base FLAN-T5-small | 0.195 | 0.187 | 0.200 | 0.486 |
+| Fine-tuned FLAN-T5-small | 0.232 | 0.210 | 0.350 | 0.593 |
+
+Fine-tuning improves the small FLAN-T5 model, but its citation quality remains weaker than the extractive answer mode.
+
+## 9. Reproducibility
 
 Main commands:
 
@@ -252,7 +290,7 @@ python scripts/train_embedding_model.py --epochs 1 --batch-size 16 --max-seq-len
 python scripts/train_cross_encoder_reranker.py --epochs 1 --batch-size 8
 ```
 
-## 9. Hardware and Limitations
+## 10. Hardware and Limitations
 
 The local environment used for these experiments is CPU-only. CUDA is not available. Because of this, full embedding and cross-encoder reranker fine-tuning were run with smaller CPU configurations, while large LLM fine-tuning was prepared as reproducible data and scripts but not fully executed locally.
 
@@ -264,7 +302,7 @@ Limitations:
 - CPU FLAN-T5 SFT smoke training worked, but the generated answers were too weak for the final demo.
 - Full LLM fine-tuning should be run on GPU with a stronger Turkish-capable instruction model.
 
-## 10. Conclusion
+## 11. Conclusion
 
 The project establishes a reproducible Turkish legal RAG pipeline with retrieval, QA evaluation, reranker testing, embedding fine-tuning infrastructure, and error analysis.
 
