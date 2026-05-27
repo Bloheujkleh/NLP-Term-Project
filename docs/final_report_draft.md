@@ -127,11 +127,15 @@ Answer and grounding metrics:
 
 For legal QA, source hit, citation accuracy, and faithfulness are especially important because a fluent answer is not enough if it is not grounded in a legal document.
 
+Citation accuracy is implemented as a strict label-presence check. For each benchmark question, the gold source citation labels are collected from the relevant document metadata. The generated answer is counted as citation-correct if it contains at least one of those expected citation labels. In code, this is implemented by `citation_label_accuracy(answer, gold_citation_labels)`, which returns 1.0 if any gold citation label appears in the answer string and 0.0 otherwise. This metric is intentionally strict about source labeling, but it does not by itself prove semantic correctness; it is interpreted together with answer quality and faithfulness metrics.
+
 The retrieval metrics answer the question: "Did the system find the right source?" The answer metrics answer the question: "Did the system produce the expected answer?" The grounding metrics answer the question: "Can the answer be trusted as source-supported?" All three are needed for the rubric's first scenario.
 
 The project uses Exact Match, but Exact Match is not expected to be high for extractive or generative QA because correct answers may be phrased differently from the gold answer. Token F1 and ROUGE-L are more forgiving because they measure partial overlap. Source-hit and citation metrics are especially relevant because a legal answer can be phrased differently but still be useful if it cites the correct legal source.
 
 Faithfulness is evaluated in two ways. The lexical proxy measures how much of the answer appears in the retrieved context. This is simple and reproducible, but it can overestimate support because matching words do not always imply semantic entailment. The NLI judge is stricter: it treats the retrieved context as a premise and the answer as a hypothesis, then estimates whether the premise supports the hypothesis. This is why the NLI faithfulness score is lower than the lexical proxy.
+
+The local NLI judge uses `MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli`. The entailment threshold is 0.5: an answer is counted as supported if the model's entailment probability is at least 0.5. This judge is used because it can run locally without an external API key while still providing a semantic support signal beyond token overlap.
 
 ## 5. Base RAG System
 
@@ -269,6 +273,8 @@ Result: fine-tuning improves the same FLAN-T5 model under the same retrieval and
 
 This is the most direct response to the "same LLM" requirement. The base and fine-tuned systems use the same model family, the same retrieval setup, and the same evaluation slice. The fine-tuned FLAN-T5 model improves over the base FLAN-T5 model on token F1, ROUGE-L, citation accuracy, and faithfulness proxy. However, the absolute citation score is still low for a legal QA demo. Therefore, the fine-tuned LLM is documented and available as an optional generation path, while the default demo uses the safer extractive answer generator.
 
+The same-LLM requirement is therefore addressed by this FLAN-T5 comparison, not by the extractive deployment pipeline. The extractive pipeline is retained as the default live demo because it is more reliable for citation-grounded legal QA. The FLAN-T5 experiment is intentionally described as a CPU smoke experiment because it uses only a 20-question evaluation slice and a small model; it demonstrates the fine-tuning path and direction of improvement, but it is not claimed to be a production-quality legal LLM.
+
 ## 7. Base RAG vs Fine-Tuned RAG Comparison
 
 The instructor note asks for Base RAG and Fine-tuned RAG to be compared on the same benchmark. The project includes a runner for this:
@@ -309,6 +315,8 @@ This result is important: the project does not hide negative fine-tuning results
 
 The end-to-end comparison also clarifies the difference between a component improvement and a system improvement. The fine-tuned reranker improved over the pretrained reranker in the reranker-specific ablation, but the complete RAG pipeline with the fine-tuned reranker did not outperform the BM25 base system on the 150-question benchmark. Since the instructor's benchmark will evaluate the complete system, the final system choice must prioritize end-to-end metrics.
 
+This comparison uses an extractive answer generator rather than an LLM. It is included to measure the end-to-end contribution of the fine-tuned reranker under a fixed answer-generation component. The separate FLAN-T5 ablation above is the same-LLM base-versus-fine-tuned comparison.
+
 ## 8. Ablation Study
 
 The contribution of each fine-tuned component is summarized below.
@@ -348,6 +356,8 @@ This corresponds to an approximate unsupported-answer rate of:
 ```
 
 The judge is stricter than lexical overlap, so this is a more conservative grounding estimate.
+
+Example error pattern: if the retriever ranks an incorrect source first, the extractive answer may still be faithful to that retrieved source but not correct for the user's question. In that case, lexical faithfulness can look high, while source-hit and citation accuracy reveal the real problem. This is why the report evaluates retrieval, answer quality, citation, and faithfulness together instead of relying on a single metric.
 
 The approximate unsupported-answer rate is not presented as an absolute real-world hallucination rate. It is a benchmark-specific proxy based on the local NLI judge. Still, it is useful because it measures whether generated answers are semantically supported by retrieved sources. In legal QA, this is more important than surface fluency.
 
@@ -483,6 +493,18 @@ The project has several limitations:
 - The NLI faithfulness judge is a local semantic judge, not an external API-based LLM judge.
 
 These limitations are reported explicitly because the project selection is based on measured behavior, not on assuming that every fine-tuned component improves performance.
+
+Hardware summary:
+
+| Resource | Availability / Use |
+|---|---|
+| GPU / CUDA | Not available in the local environment |
+| Embedding fine-tuning | Completed on CPU |
+| Reranker fine-tuning | Completed on CPU |
+| FLAN-T5 SFT smoke | Completed on CPU |
+| Large LLM fine-tuning | Not attempted locally because it would require a stronger GPU setup |
+
+The CPU-only setup explains why the LLM experiment is limited to FLAN-T5-small and a small evaluation slice. This limitation is not hidden; it is part of the reported experimental design.
 
 Future work should focus on stronger GPU-based instruction tuning of a Turkish-capable legal LLM, better negative sampling for dense retrieval, and reranker validation against an external benchmark before deployment. A stronger generative model could eventually replace the extractive answer mode if it achieves comparable citation accuracy and faithfulness.
 
