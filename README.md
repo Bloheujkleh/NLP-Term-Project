@@ -132,6 +132,14 @@ Optional local generative LLM demo with the CPU fine-tuned FLAN-T5 smoke checkpo
 python scripts/demo_app.py --data-dir data --answer-mode local_hf --generation-model outputs/models/flan_t5_legal_sft_smoke_512
 ```
 
+If the generated checkpoint is not present after cloning, recreate it with:
+
+```bash
+python scripts/train_seq2seq_generator.py --data-dir data --limit 512 --eval-size 64 --epochs 1 --batch-size 2 --grad-accum 8 --output-dir outputs/models/flan_t5_legal_sft_smoke_512
+```
+
+The default demo does not require this checkpoint.
+
 CLI version of the same generative path:
 
 ```bash

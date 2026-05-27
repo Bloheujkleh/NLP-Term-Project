@@ -440,6 +440,8 @@ The optional LLM generation path remains available:
 python scripts/demo_app.py --data-dir data --answer-mode local_hf --generation-model outputs/models/flan_t5_legal_sft_smoke_512
 ```
 
+The `outputs/models/flan_t5_legal_sft_smoke_512` checkpoint is a generated local artifact from the SFT smoke run and is not required for the default demo. If the checkpoint is not present after cloning, it can be recreated with the training command in the reproducibility section, or the base model can be used with `--generation-model google/flan-t5-small`.
+
 However, the default demo remains extractive because it is more citation-reliable.
 
 This final-system choice is aligned with the legal domain. A more fluent but weakly grounded LLM answer is less appropriate for legal QA than a more conservative answer with a clear source. The report therefore separates two claims:
@@ -455,6 +457,7 @@ Important commands:
 python scripts/evaluate_retrieval.py --data-dir data --retriever bm25 --top-k 10
 python scripts/evaluate_qa.py --data-dir data --retriever bm25 --generation-mode extractive --top-k 5
 python scripts/run_base_vs_finetuned_eval.py --data-dir data --output-dir outputs/submission_eval_bm25_vs_finetuned_reranker --base-retriever bm25 --finetuned-retriever bm25 --finetuned-reranker-model PATH_TO_RERANKER
+python scripts/train_seq2seq_generator.py --data-dir data --limit 512 --eval-size 64 --epochs 1 --batch-size 2 --grad-accum 8 --output-dir outputs/models/flan_t5_legal_sft_smoke_512
 python scripts/validate_custom_data.py --data-dir sample_custom_data --require-benchmark
 python scripts/demo_app.py --data-dir data
 ```
