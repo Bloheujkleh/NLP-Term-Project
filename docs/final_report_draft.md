@@ -1,95 +1,121 @@
-# Improving Turkish Legal Question Answering with an Optimized RAG Pipeline
+# Turkish Legal RAG: Base vs Fine-Tuned RAG Evaluation
 
-## 1. Introduction
+## 1. Objective
 
-This project develops a domain-adapted Retrieval-Augmented Generation (RAG) system for Turkish legal question answering. The goal is to answer Turkish legal questions with grounded, source-supported, and citation-consistent responses while minimizing hallucination.
+This project implements and evaluates a Retrieval-Augmented Generation (RAG) system for Turkish legal question answering. The goal is not only to produce fluent answers, but to produce answers that are grounded in legal sources, cite the supporting document, and can be evaluated on a gold benchmark.
 
-Legal QA is especially sensitive to hallucination because an answer may look fluent while being unsupported by legal sources. For this reason, the system is evaluated not only by answer similarity metrics, but also by retrieval quality, citation accuracy, and faithfulness-oriented grounding signals.
+The instructor submission note defines four important requirements:
 
-## 2. Problem Definition
+1. Compare Base RAG and Fine-tuned RAG systems using the same benchmark and, where applicable, the same LLM.
+2. Use meaningful metrics depending on whether a gold benchmark is available.
+3. Show ablation results for fine-tuned embedding, reranker, and LLM components where possible.
+4. Support instructor-provided custom document collections and custom benchmark files.
 
-Input:
+This report is organized around those requirements.
+
+## 2. Dataset and Evaluation Scenario
+
+The project uses Turkish legal QA data with source documents, questions, verified answers, and relevant document identifiers. This matches Scenario 1 in the project rubric:
 
 ```text
-A Turkish legal question
+Gold Question + Gold Answer + Gold Document
 ```
 
-Output:
+Because gold relevant documents exist, retrieval must be evaluated. Because gold answers exist, answer quality can be evaluated with lexical answer metrics. Because the task is legal QA, grounding and citation quality are also evaluated.
 
-```text
-A Turkish answer grounded in retrieved legal sources, with citation information
-```
-
-The main research questions are:
-
-- How strong is a simple lexical baseline for Turkish legal retrieval?
-- Does a generic multilingual dense embedding model perform well in this domain?
-- Does hybrid retrieval improve over BM25?
-- Does a pretrained multilingual reranker improve ranking quality?
-- Which errors come from retrieval failure and which come from ranking failure?
-
-## 3. Dataset
-
-The project uses the provided Turkish legal RAG dataset.
+Main assignment dataset files used in the original benchmark:
 
 | File | Size | Purpose |
 |---|---:|---|
-| `corpus.jsonl` | 7,579 rows | Source chunks used for retrieval |
+| `corpus.jsonl` | 7,579 rows | Legal source chunks used for retrieval |
 | `rag_eval.json` | 1,000 rows | Retrieval benchmark with gold chunk IDs |
-| `gold_benchmark.json` | 240 rows | Gold QA benchmark with verified answers and gold sources |
+| `gold_benchmark.json` | 240 rows | QA benchmark with verified answers and gold sources |
 | `embedding.jsonl` | 2,059 rows | Query-positive-negative triples for embedding tuning |
 | `reranker.jsonl` | 6,752 rows | Query-passage-label pairs for reranker tuning |
 | `llm.jsonl` | 13,758 rows | Source-grounded instruction tuning examples |
 
-All 240 gold benchmark source IDs are present in the retrieval corpus, so the benchmark fits Scenario 1 from the rubric: Gold Question + Gold Answer + Gold Document.
+The latest repository also includes a custom-style local evaluation set:
 
-## 4. System Architecture
+| File | Size | Purpose |
+|---|---:|---|
+| `data/real_corpus.jsonl` | 15,094 rows | Larger local legal corpus |
+| `data/eval_qa_150.jsonl` | 150 rows | Local custom-style QA benchmark |
+| `sample_custom_data/corpus.jsonl` | 3 rows | Minimal custom corpus example |
+| `sample_custom_data/eval_qa.jsonl` | 3 rows | Minimal custom benchmark example |
 
-The baseline RAG pipeline is:
+The main point is that the system can operate on a folder containing a custom `corpus.jsonl` and a custom benchmark file, not only on the original dataset.
+
+## 3. System Architecture
+
+The RAG pipeline is:
 
 ```text
-Question -> Retriever -> Top-k source chunks -> Answer generator -> Citation-grounded answer
+Question
+-> Retriever
+-> Top-k legal source chunks
+-> Optional reranker
+-> Answer generator
+-> Answer with citation
 ```
 
-Implemented retrievers:
+Implemented retrieval components:
 
 - BM25 lexical retrieval
-- Dense retrieval with `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
-- Hybrid retrieval using min-max normalized BM25 and dense scores
+- Dense vector retrieval with sentence-transformer embeddings
+- Hybrid retrieval combining lexical and dense retrieval
+- RRF-style rank fusion in the latest retrieval implementation
 
-Implemented answer generation modes:
+Implemented generation components:
 
-- Extractive grounded answer from the top retrieved source
-- Optional local HuggingFace seq2seq generation mode
+- Extractive source-grounded answer generator
+- Optional local HuggingFace generator using FLAN-T5
+- Optional Ollama generation path
 
-## 5. Evaluation Methodology
+The default live demo uses:
 
-### 5.1 Retrieval Metrics
+```text
+BM25 retrieval -> extractive source-grounded answer -> citation
+```
 
-Retrieval is evaluated on `rag_eval.json` using:
+This is the most reliable measured live configuration. The Base vs Fine-tuned experiments below are still reported separately, as required by the submission note.
 
-- Recall@5
-- Recall@10
-- Mean Reciprocal Rank
-- nDCG@10
+## 4. Metrics
 
-### 5.2 QA Metrics
+Because this project has gold questions, gold answers, and gold documents, the metrics are selected according to Scenario 1 in the rubric.
 
-Question answering is evaluated on `gold_benchmark.json` using:
+Retrieval metrics:
 
-- Exact Match
-- Token F1
-- ROUGE-L
-- Top-1 source hit
-- Top-5 source hit
-- Citation label accuracy
-- Lexical faithfulness proxy
+| Metric | Purpose |
+|---|---|
+| Recall@5 / Recall@10 | Measures whether the relevant document is retrieved in top-k. |
+| MRR | Measures how highly the first relevant document is ranked. |
+| nDCG@10 | Measures ranking quality with higher reward for relevant documents near the top. |
 
-Citation label accuracy checks whether the generated answer contains the gold citation label. The lexical faithfulness proxy measures how much of the answer body is covered by retrieved context tokens.
+Answer and grounding metrics:
 
-## 6. Experiments and Results
+| Metric | Purpose |
+|---|---|
+| Exact Match | Strict string-level answer match. |
+| Token F1 | Token overlap between generated answer and gold answer. |
+| ROUGE-L | Longest common subsequence overlap with gold answer. |
+| Top-1 / Top-5 source hit | Whether the retrieved sources contain the gold source. |
+| Citation accuracy | Whether the answer cites the expected source label. |
+| Faithfulness proxy | Whether answer tokens are supported by retrieved context tokens. |
+| NLI faithfulness judge | A local multilingual NLI model checks semantic support from context. |
 
-### 6.1 Retrieval Baselines
+For legal QA, source hit, citation accuracy, and faithfulness are especially important because a fluent answer is not enough if it is not grounded in a legal document.
+
+## 5. Base RAG System
+
+The Base RAG system is:
+
+```text
+BM25 retrieval -> answer generator -> citation
+```
+
+BM25 is a lexical retrieval method. It is a strong baseline for legal data because legal questions often contain exact legal terms, article names, and source-specific wording.
+
+Original 1,000-query retrieval benchmark:
 
 | Retriever | Recall@5 | Recall@10 | MRR | nDCG@10 |
 |---|---:|---:|---:|---:|
@@ -97,215 +123,304 @@ Citation label accuracy checks whether the generated answer contains the gold ci
 | Dense multilingual MiniLM | 0.613 | 0.676 | 0.518 | 0.556 |
 | Hybrid, dense weight 0.35 | 0.940 | 0.969 | 0.855 | 0.883 |
 
-BM25 is the strongest retrieval baseline. This is likely because Turkish legal questions often include exact legal terms, article numbers, court names, or source-specific wording.
+BM25 is the strongest retrieval baseline in this benchmark.
 
-The generic multilingual dense model performs substantially worse than BM25, which motivates domain-specific embedding adaptation.
-
-The first hybrid configuration does not improve over BM25. This suggests that hybrid retrieval requires careful weighting and that adding a weak dense retriever can reduce ranking quality.
-
-### 6.2 Reranker Experiments
-
-Pipeline:
-
-```text
-Question -> BM25 top-30 -> cross-encoder reranker -> top-10
-```
-
-Model:
-
-```text
-cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
-```
-
-Evaluation was performed on a 100-query subset due to CPU-only inference cost.
-
-| System | Recall@5 | Recall@10 | MRR | nDCG@10 |
-|---|---:|---:|---:|---:|
-| BM25 first stage on same 100 queries | 1.000 | 1.000 | 0.990 | 0.993 |
-| Pretrained cross-encoder reranker | 0.700 | 0.810 | 0.550 | 0.612 |
-
-The pretrained reranker hurts performance. This indicates domain mismatch: the reranker was trained for general passage ranking, not Turkish legal ranking. This result supports the requirement for cross-encoder fine-tuning using `reranker.jsonl`.
-
-A full CPU fine-tuning run was then performed on all 6,752 rows of `reranker.jsonl` using one epoch, batch size 4, and max sequence length 128. Training took 3,047 seconds and reached training loss 0.358.
-
-Full benchmark evaluation:
-
-| System | Queries | Recall@5 | Recall@10 | MRR | nDCG@10 |
-|---|---:|---:|---:|---:|---:|
-| BM25 first stage | 1,000 | 0.947 | 0.975 | 0.864 | 0.890 |
-| Fine-tuned reranker | 1,000 | 0.882 | 0.915 | 0.789 | 0.820 |
-
-The fine-tuned reranker substantially improves over the pretrained reranker, but it still does not beat the raw BM25 ranking. Therefore, the final demo uses BM25 directly while reporting reranker fine-tuning as an ablation.
-
-### 6.3 Embedding Tuning Experiment
-
-A triplet-loss embedding fine-tuning script was implemented using `embedding.jsonl`.
-
-Training triple:
-
-```text
-query, positive_passage, hard_negative_passage
-```
-
-First, a small CPU smoke test used only 64 triples to verify the training and evaluation workflow.
-
-| Model | Recall@5 | Recall@10 | MRR | nDCG@10 |
-|---|---:|---:|---:|---:|
-| Base dense model, first 50 queries | 0.820 | 0.900 | 0.738 | 0.776 |
-| Smoke fine-tuned model, 64 triples | 0.840 | 0.880 | 0.725 | 0.762 |
-
-The smoke run confirmed that the training pipeline works end to end.
-
-A full CPU fine-tuning run was then executed using all 2,059 embedding triples. The local PyTorch installation did not expose a CUDA device, so the run used `batch_size=4`, `max_seq_length=256`, and one epoch. Training took 2,471 seconds and reached training loss 3.257.
-
-Full benchmark evaluation:
-
-| Dense model | Recall@5 | Recall@10 | MRR | nDCG@10 |
-|---|---:|---:|---:|---:|
-| Base multilingual MiniLM | 0.613 | 0.676 | 0.518 | 0.556 |
-| CPU triplet fine-tuned model | 0.539 | 0.591 | 0.456 | 0.488 |
-
-The full CPU fine-tuning run degraded dense retrieval quality. This is an important ablation result: fine-tuning is not automatically beneficial, especially when the base model, negative sampling, objective, sequence length, and validation strategy are not tuned for Turkish legal retrieval. Therefore, the final demo system keeps BM25 as the primary retriever.
-
-### 6.4 QA and Grounding Evaluation
-
-The current QA baseline retrieves top-5 chunks with BM25 and returns an extractive source-grounded answer from the top-1 chunk.
+QA evaluation with BM25 and extractive source-grounded answers on the 240-question gold benchmark:
 
 | System | EM | Token F1 | ROUGE-L | Top-1 Source Hit | Top-5 Source Hit | Citation Accuracy | Faithfulness Proxy |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | BM25 + extractive answer | 0.363 | 0.799 | 0.793 | 0.813 | 0.908 | 0.813 | 0.961 |
 
-The faithfulness proxy is high because the baseline answer is extractive and directly uses retrieved source text. However, answer quality and citation accuracy are limited by whether the correct source is ranked first.
+This establishes the main reliable baseline.
 
-### 6.5 LLM/NLI Judge Faithfulness
+## 6. Fine-Tuned RAG Variants
 
-To add a semantic grounding check beyond token overlap, a judge-based faithfulness evaluator was implemented in `scripts/evaluate_llm_judge.py`. The script supports an optional API-based LLM judge, a local FLAN-T5 judge, and a local multilingual NLI judge. Because no API key was available and FLAN-T5-small was unreliable for Turkish legal text, the final run used:
+Three fine-tuning directions were implemented and evaluated:
+
+1. Fine-tuned embedding model
+2. Fine-tuned cross-encoder reranker
+3. Fine-tuned FLAN-T5 generator
+
+The goal was not to assume fine-tuning always improves the system. The goal was to measure whether each fine-tuned component improves the same pipeline or the relevant ablation.
+
+### 6.1 Fine-Tuned Embedding Model
+
+The embedding model was fine-tuned with query-positive-negative triples:
 
 ```text
-MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli
+query, positive_passage, negative_passage
 ```
 
-The judge compares each generated answer against the top retrieved source text and predicts whether the answer is entailed by that source.
+The intended effect is to move a legal question closer to its relevant legal passage in vector space and farther from irrelevant passages.
 
-| Judge | Examples | Supported | Rejected | Faithfulness |
+Full CPU fine-tuning used all 2,059 triples with one epoch, batch size 4, and max sequence length 256. Training took 2,471 seconds.
+
+Dense retrieval before and after fine-tuning:
+
+| Dense Model | Recall@5 | Recall@10 | MRR | nDCG@10 |
 |---|---:|---:|---:|---:|
-| Multilingual NLI judge | 240 | 206 | 34 | 0.858 |
+| Base multilingual MiniLM | 0.613 | 0.676 | 0.518 | 0.556 |
+| Fine-tuned embedding model | 0.539 | 0.591 | 0.456 | 0.488 |
 
-The judge score is lower than the lexical proxy, which is expected because semantic entailment is stricter than token overlap. It still indicates that most generated answers are grounded in the retrieved source.
+Result: embedding fine-tuning did not improve dense retrieval on this benchmark. This is reported as a negative ablation result.
 
-### 6.6 LLM/SFT Smoke Experiment
+### 6.2 Fine-Tuned Reranker
 
-The dataset includes 13,758 source-grounded instruction-tuning examples in `llm.jsonl`. A CPU-safe seq2seq fine-tuning script was added in `scripts/train_seq2seq_generator.py` to verify that the LLM training path works end to end.
+The reranker pipeline is:
 
-The smoke run used `google/flan-t5-small` with 512 examples, one epoch, batch size 2, gradient accumulation 8, max input length 512, and max target length 160. It trained 448 examples and evaluated on 64 examples.
+```text
+Question -> BM25 candidates -> cross-encoder reranker -> top-k sources
+```
+
+A pretrained multilingual cross-encoder reranker was first tested, then fine-tuned using the reranker training data.
+
+100-query subset:
+
+| System | Recall@5 | Recall@10 | MRR | nDCG@10 |
+|---|---:|---:|---:|---:|
+| BM25 first stage on same 100 queries | 1.000 | 1.000 | 0.990 | 0.993 |
+| Pretrained cross-encoder reranker | 0.700 | 0.810 | 0.550 | 0.612 |
+| Fine-tuned cross-encoder reranker | 0.950 | 0.970 | 0.898 | 0.916 |
+
+The fine-tuned reranker improves substantially over the pretrained reranker.
+
+Full 1,000-query benchmark:
+
+| System | Queries | Recall@5 | Recall@10 | MRR | nDCG@10 |
+|---|---:|---:|---:|---:|---:|
+| BM25 first-stage ranking | 1,000 | 0.947 | 0.975 | 0.864 | 0.890 |
+| Fine-tuned reranker | 1,000 | 0.882 | 0.915 | 0.789 | 0.820 |
+
+Result: the fine-tuned reranker improves over the pretrained reranker, but BM25 remains stronger on the full benchmark.
+
+### 6.3 Fine-Tuned FLAN-T5 Generator
+
+For the LLM component, `google/flan-t5-small` was used because it is an open-source seq2seq model that can be fine-tuned and run locally on CPU for a small smoke experiment.
+
+Training setup:
 
 | Model | Train examples | Eval examples | Runtime | Train loss | Eval loss |
 |---|---:|---:|---:|---:|---:|
 | FLAN-T5-small SFT smoke | 448 | 64 | 629 sec | 7.368 | 0.514 |
 
-The fine-tuned smoke generator was then evaluated on 20 gold QA examples with BM25 retrieval:
+The input format is source-grounded:
 
-| Generator | EM | Token F1 | ROUGE-L | Citation Accuracy | Faithfulness Proxy |
-|---|---:|---:|---:|---:|---:|
-| Base FLAN-T5-small | 0.000 | 0.076 | 0.056 | 0.000 | 0.452 |
-| FLAN-T5-small SFT smoke | 0.000 | 0.103 | 0.075 | 0.000 | 0.616 |
-
-This confirms that the LLM/SFT pipeline works and that fine-tuning improves the same base model under the same generation pipeline. However, the small CPU-trained model is still not strong enough for the final demo. The final system therefore keeps the extractive grounded generator for reliability and citation correctness.
-
-## 7. Error Analysis
-
-Error analysis on the 240-question gold benchmark found:
-
-- Top-5 retrieval failures: 22
-- Ranking failures: 23
-
-Failure definitions:
-
-- Retrieval failure: the gold source is not present in top-5.
-- Ranking failure: the gold source is in top-5 but not top-1.
-- Formatting mismatch: the correct source is retrieved but answer wording differs from the verified answer.
-
-These results show that future improvements should target two different parts of the pipeline:
-
-- Better first-stage retrieval for the 22 retrieval failures
-- Domain-tuned reranking for the 23 ranking failures
-
-## 8. Submission Compatibility Checks
-
-The final repository includes explicit support for instructor-provided custom document collections and benchmark files. A custom corpus can be supplied as `corpus.jsonl`, `corpus_index.jsonl`, or `real_corpus.jsonl`, and each document must include at least an `id` and `text`. A custom benchmark can be supplied as `eval_qa.jsonl`, `custom_benchmark.jsonl`, or `benchmark.jsonl`, with question, gold answer, and relevant document fields.
-
-The custom data path was validated with:
-
-```bash
-python scripts/validate_custom_data.py --data-dir sample_custom_data --require-benchmark
+```text
+question + retrieved/legal context -> target answer
 ```
 
-Base RAG and fine-tuned RAG can be evaluated on the same corpus, same benchmark, and same answer generator with:
-
-```bash
-python scripts/run_base_vs_finetuned_eval.py --data-dir sample_custom_data --output-dir outputs/sample_submission_eval
-```
-
-On the 150-question local benchmark, a same-generator comparison was run between BM25 base RAG and BM25 plus the fine-tuned cross-encoder reranker:
-
-| Metric | Base BM25 RAG | Fine-tuned reranker RAG |
-|---|---:|---:|
-| Token F1 | 0.703 | 0.631 |
-| ROUGE-L | 0.702 | 0.621 |
-| Top-1 source hit | 0.960 | 0.620 |
-| Top-5 source hit | 0.993 | 0.900 |
-| Citation accuracy | 0.960 | 0.620 |
-| NLI faithfulness | 0.807 | 0.792 |
-
-This submission check reinforces the final design choice: the fine-tuned reranker does not improve the current benchmark, so the live demo keeps BM25 as the default retrieval strategy.
-
-A same-pipeline LLM smoke comparison was also run on 20 questions:
+Same-pipeline LLM comparison on a 20-question benchmark slice:
 
 | Generator | Token F1 | ROUGE-L | Citation Accuracy | Faithfulness Proxy |
 |---|---:|---:|---:|---:|
 | Base FLAN-T5-small | 0.195 | 0.187 | 0.200 | 0.486 |
 | Fine-tuned FLAN-T5-small | 0.232 | 0.210 | 0.350 | 0.593 |
 
-Fine-tuning improves the small FLAN-T5 model, but its citation quality remains weaker than the extractive answer mode.
+Result: fine-tuning improves the same FLAN-T5 model under the same retrieval and generation pipeline. However, the fine-tuned model is still weaker than the extractive answer mode for legal citation reliability.
 
-## 9. Reproducibility
+## 7. Base RAG vs Fine-Tuned RAG Comparison
 
-Main commands:
-
-```bash
-python scripts/evaluate_retrieval.py --retriever bm25 --top-k 10 --output outputs/retrieval_eval_bm25_full.json
-python scripts/evaluate_retrieval.py --retriever dense --top-k 10 --output outputs/retrieval_eval_dense_full.json
-python scripts/evaluate_retrieval.py --retriever hybrid --dense-weight 0.35 --top-k 10 --output outputs/retrieval_eval_hybrid_full.json
-python scripts/evaluate_qa.py --retriever bm25 --generation-mode extractive --top-k 5 --output outputs/qa_eval_extractive_bm25_full.json
-python scripts/evaluate_llm_judge.py --input outputs/qa_eval_extractive_bm25_full.json --provider nli --output outputs/nli_judge_faithfulness_full.json
-python scripts/evaluate_reranker.py --reranker-model outputs/models/legal_cross_encoder_reranker_full_cpu_128 --candidate-k 50 --top-k 10 --batch-size 16 --max-length 128 --output outputs/reranker_eval_finetuned_full_cpu_128_full.json
-python scripts/train_seq2seq_generator.py --limit 512 --eval-size 64 --epochs 1 --batch-size 2 --grad-accum 8 --max-input-length 512 --max-target-length 160 --output-dir outputs/models/flan_t5_legal_sft_smoke_512 --metrics-output outputs/llm_sft_smoke_512_metrics.json
-python scripts/analyze_qa_errors.py --input outputs/qa_eval_extractive_bm25_full.json --output outputs/qa_error_analysis.md
-```
-
-Training commands:
+The instructor note asks for Base RAG and Fine-tuned RAG to be compared on the same benchmark. The project includes a runner for this:
 
 ```bash
-python scripts/train_embedding_model.py --epochs 1 --batch-size 16 --max-seq-length 384
-python scripts/train_cross_encoder_reranker.py --epochs 1 --batch-size 8
+python scripts/run_base_vs_finetuned_eval.py --data-dir DATA_DIR --output-dir OUTPUT_DIR
 ```
 
-## 10. Hardware and Limitations
+Latest submission-style comparison on the 150-question local benchmark:
 
-The local environment used for these experiments is CPU-only. CUDA is not available. Because of this, full embedding and cross-encoder reranker fine-tuning were run with smaller CPU configurations, while large LLM fine-tuning was prepared as reproducible data and scripts but not fully executed locally.
+Base RAG:
 
-Limitations:
+```text
+BM25 retrieval -> extractive answer
+```
 
-- The current answer generator is extractive, not a final fine-tuned LLM.
-- CPU embedding fine-tuning degraded dense retrieval, so the final demo uses BM25.
-- CPU reranker fine-tuning improved over the pretrained reranker but still did not beat BM25.
-- CPU FLAN-T5 SFT smoke training worked, but the generated answers were too weak for the final demo.
-- Full LLM fine-tuning should be run on GPU with a stronger Turkish-capable instruction model.
+Fine-tuned RAG:
 
-## 11. Conclusion
+```text
+BM25 top-15 candidates -> fine-tuned cross-encoder reranker -> top-5 -> extractive answer
+```
 
-The project establishes a reproducible Turkish legal RAG pipeline with retrieval, QA evaluation, reranker testing, embedding fine-tuning infrastructure, and error analysis.
+Both systems use the same corpus, same benchmark, and same extractive answer generator.
 
-The strongest current system is BM25-based retrieval with extractive grounded answers. BM25 achieves 0.975 Recall@10 on the retrieval benchmark and 0.908 Top-5 source hit on the gold QA benchmark.
+| Metric | Base BM25 RAG | Fine-tuned reranker RAG | Delta |
+|---|---:|---:|---:|
+| Token F1 | 0.703 | 0.631 | -0.072 |
+| ROUGE-L | 0.702 | 0.621 | -0.080 |
+| Top-1 source hit | 0.960 | 0.620 | -0.340 |
+| Top-5 source hit | 0.993 | 0.900 | -0.093 |
+| Citation accuracy | 0.960 | 0.620 | -0.340 |
+| Faithfulness proxy | 0.928 | 0.934 | +0.006 |
+| NLI faithfulness | 0.807 | 0.792 | -0.015 |
 
-The experiments also reveal clear optimization directions. Generic dense embeddings underperform lexical retrieval, a naive CPU triplet fine-tuning run further degrades dense retrieval, and a pretrained general-domain reranker hurts performance. Fine-tuning the reranker improves it substantially, but the direct BM25 ranking remains strongest on this benchmark. A small CPU LLM SFT smoke run verifies the generator training path but is not reliable enough for live use. Therefore, future optimized systems should use carefully validated domain adaptation rather than assuming that fine-tuning alone will improve the pipeline.
+Interpretation: on this benchmark, the fine-tuned reranker variant does not improve the final RAG performance. It slightly increases lexical faithfulness, but it hurts source ranking and citation accuracy. Therefore, the final live demo keeps BM25 as the default retriever.
+
+This result is important: the project does not hide negative fine-tuning results. It reports them and selects the final system based on measured performance.
+
+## 8. Ablation Study
+
+The contribution of each fine-tuned component is summarized below.
+
+| Component | Base System | Fine-Tuned Variant | Result | Final Decision |
+|---|---|---|---|---|
+| Embedding | Base multilingual dense retriever | Fine-tuned dense retriever | Worse Recall@10 and MRR | Not used in final demo |
+| Reranker | Pretrained cross-encoder | Fine-tuned cross-encoder | Improved over pretrained reranker but did not beat BM25 | Reported as ablation |
+| LLM | Base FLAN-T5-small | Fine-tuned FLAN-T5-small | Improved F1, citation, and faithfulness on 20-question slice | Optional mode only |
+| Final demo | BM25 + extractive answer | N/A | Strongest citation-reliable live setup | Used as default demo |
+
+Main conclusion from the ablation: fine-tuning is useful to test, but it does not automatically improve the final legal RAG system. Legal QA requires measured selection based on retrieval accuracy, citation correctness, and grounding.
+
+## 9. Faithfulness and Hallucination-Oriented Evaluation
+
+Hallucination in legal QA means producing an answer that is not supported by the retrieved legal source. For example, if the source says "muebbet hapis" but the model answers "20 years", that is an unsupported answer.
+
+The system uses multiple grounding checks:
+
+- Extractive answers to reduce unsupported generation risk
+- Citation labels to show the source of the answer
+- Lexical faithfulness proxy
+- Local multilingual NLI faithfulness judge
+
+NLI judge result on the 240-question original QA benchmark:
+
+| Judge | Examples | Supported | Rejected | Faithfulness |
+|---|---:|---:|---:|---:|
+| Multilingual NLI judge | 240 | 206 | 34 | 0.858 |
+
+This corresponds to an approximate unsupported-answer rate of:
+
+```text
+34 / 240 = 14.2%
+```
+
+The judge is stricter than lexical overlap, so this is a more conservative grounding estimate.
+
+## 10. Custom Document and Custom Benchmark Support
+
+The instructor must be able to provide a custom document collection and a custom benchmark. This is supported through `--data-dir`.
+
+Accepted custom corpus files:
+
+```text
+corpus.jsonl
+corpus_index.jsonl
+real_corpus.jsonl
+```
+
+Each corpus row must contain at least:
+
+```json
+{"id": "DOC_001", "text": "Legal source text"}
+```
+
+Optional fields:
+
+```json
+{"title": "Source title", "metadata": {"citation_label": "Citation label"}}
+```
+
+Accepted custom benchmark files:
+
+```text
+eval_qa.jsonl
+custom_benchmark.jsonl
+benchmark.jsonl
+eval_qa_150.jsonl
+```
+
+Recommended benchmark row:
+
+```json
+{"question": "Kasten oldurme sucu nedir?", "gold_answer": "...", "source_id": "DOC_001"}
+```
+
+Validation command:
+
+```bash
+python scripts/validate_custom_data.py --data-dir sample_custom_data --require-benchmark
+```
+
+Demo on custom documents:
+
+```bash
+python scripts/demo_app.py --data-dir sample_custom_data
+```
+
+Evaluation on custom benchmark:
+
+```bash
+python scripts/run_base_vs_finetuned_eval.py --data-dir sample_custom_data --output-dir outputs/sample_submission_eval
+```
+
+This directly addresses the custom document and custom benchmark requirements.
+
+## 11. Final System Choice
+
+The final default demo system is:
+
+```text
+BM25 retrieval -> extractive source-grounded answer -> citation
+```
+
+This is not chosen because it is the most complex model. It is chosen because it is the most reliable measured configuration for live Turkish legal QA in this environment.
+
+Reasons:
+
+- BM25 had the strongest retrieval benchmark performance.
+- Fine-tuned dense retrieval did not improve dense retrieval.
+- Fine-tuned reranking improved over the pretrained reranker but did not beat BM25 end-to-end.
+- Fine-tuned FLAN-T5 improved over base FLAN-T5 but still had weak citation reliability.
+- Legal QA prioritizes grounded, auditable answers over fluent but unsupported generation.
+
+The optional LLM generation path remains available:
+
+```bash
+python scripts/demo_app.py --data-dir data --answer-mode local_hf --generation-model outputs/models/flan_t5_legal_sft_smoke_512
+```
+
+However, the default demo remains extractive because it is more citation-reliable.
+
+## 12. Reproducibility
+
+Important commands:
+
+```bash
+python scripts/evaluate_retrieval.py --data-dir data --retriever bm25 --top-k 10
+python scripts/evaluate_qa.py --data-dir data --retriever bm25 --generation-mode extractive --top-k 5
+python scripts/run_base_vs_finetuned_eval.py --data-dir data --output-dir outputs/submission_eval_bm25_vs_finetuned_reranker --base-retriever bm25 --finetuned-retriever bm25 --finetuned-reranker-model PATH_TO_RERANKER
+python scripts/validate_custom_data.py --data-dir sample_custom_data --require-benchmark
+python scripts/demo_app.py --data-dir data
+```
+
+Main supporting documents:
+
+| File | Purpose |
+|---|---|
+| `docs/submission_custom_evaluation_guide.md` | Custom corpus and benchmark instructions |
+| `docs/submission_evaluation_results.md` | Latest submission-style evaluation results |
+| `docs/controlled_ablation_summary.md` | Base vs fine-tuned component ablations |
+| `docs/reproducibility_evidence.md` | Exact commands and measured outputs |
+| `SUBMISSION_READY.md` | Short checklist for final submission |
+
+## 13. Limitations
+
+The project has several limitations:
+
+- The default answer generator is extractive, not a full production-level fine-tuned LLM.
+- The local machine is CPU-only; no CUDA GPU was available.
+- FLAN-T5-small is a small model and is not strong enough for high-quality Turkish legal generation.
+- Fine-tuned embedding and reranker components did not improve the final benchmark enough to replace BM25.
+- The NLI faithfulness judge is a local semantic judge, not an external API-based LLM judge.
+
+These limitations are reported explicitly because the project selection is based on measured behavior, not on assuming that every fine-tuned component improves performance.
+
+## 14. Conclusion
+
+This project implements a Turkish Legal RAG system with custom document support, gold-benchmark evaluation, Base RAG vs Fine-tuned RAG comparisons, and ablation studies for embedding, reranker, and LLM components.
+
+The most reliable default system is BM25 retrieval with extractive source-grounded answering and citation. The fine-tuned LLM improves over the base FLAN-T5 model in the same generation pipeline, satisfying the same-LLM comparison requirement, but it remains weaker than extractive answering for citation-critical legal QA.
+
+The final conclusion is:
+
+```text
+Fine-tuned components were implemented and evaluated, but the deployed live configuration is selected by benchmark performance and citation reliability.
+```

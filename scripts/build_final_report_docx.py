@@ -116,7 +116,7 @@ def build() -> None:
 
     title = doc.add_paragraph(style="Title")
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title.add_run("Improving Turkish Legal Question Answering with an Optimized RAG Pipeline")
+    title.add_run("Turkish Legal RAG: Base vs Fine-Tuned RAG Evaluation")
 
     meta = doc.add_paragraph()
     meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
