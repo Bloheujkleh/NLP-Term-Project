@@ -41,6 +41,15 @@ def main() -> None:
     parser.add_argument("--rerank-top-n", type=int, default=15)
     args = parser.parse_args()
 
+    has_finetuned_component = bool(args.finetuned_embedding_model or args.finetuned_reranker_model)
+    if not has_finetuned_component:
+        print(
+            "WARNING: No fine-tuned embedding or reranker checkpoint was provided. "
+            "This run is a smoke check with the same retrieval setup for both systems. "
+            "For a real fine-tuned RAG comparison, pass --finetuned-reranker-model or "
+            "--finetuned-embedding-model."
+        )
+
     args.output_dir.mkdir(parents=True, exist_ok=True)
     base_output = args.output_dir / "base_rag_qa.json"
     finetuned_output = args.output_dir / "finetuned_rag_qa.json"
@@ -103,6 +112,9 @@ def main() -> None:
     }
     comparison = {
         "note": "Both systems were evaluated on the same corpus, benchmark, and answer generator.",
+        "warning": None
+        if has_finetuned_component
+        else "No fine-tuned embedding or reranker checkpoint was provided; this is a smoke check, not a real fine-tuned RAG comparison.",
         "base_config": {
             "retriever": args.base_retriever,
             "embedding_model": args.base_embedding_model if args.base_retriever != "bm25" else None,

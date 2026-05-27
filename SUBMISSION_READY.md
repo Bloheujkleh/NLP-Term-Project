@@ -49,7 +49,9 @@ python scripts/validate_custom_data.py --data-dir sample_custom_data --require-b
 ## Base RAG vs Fine-Tuned RAG
 
 ```bash
-python scripts/run_base_vs_finetuned_eval.py --data-dir sample_custom_data --output-dir outputs/sample_submission_eval
+python scripts/train_cross_encoder_reranker.py --data-dir data --epochs 1 --batch-size 4 --max-length 128 --output-dir outputs/models/legal_cross_encoder_reranker_full_cpu_128
+
+python scripts/run_base_vs_finetuned_eval.py --data-dir data --output-dir outputs/submission_eval_bm25_vs_finetuned_reranker --base-retriever bm25 --finetuned-retriever bm25 --finetuned-reranker-model outputs/models/legal_cross_encoder_reranker_full_cpu_128
 ```
 
 ## Instructor-Facing Claim

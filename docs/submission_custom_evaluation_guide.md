@@ -100,7 +100,7 @@ Run both systems on the same corpus, benchmark, and answer generator:
 python scripts/run_base_vs_finetuned_eval.py --data-dir custom_data --output-dir outputs/custom_submission_eval
 ```
 
-This default command compares two BM25/extractive configurations and is mainly a smoke check. For a fine-tuned reranker comparison, provide the reranker checkpoint:
+This default command validates the evaluation wrapper but does not include a fine-tuned component unless a checkpoint is provided. For a real fine-tuned RAG comparison, provide the reranker checkpoint:
 
 ```bash
 python scripts/run_base_vs_finetuned_eval.py \

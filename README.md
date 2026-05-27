@@ -2,6 +2,30 @@
 
 This repository contains a step-by-step implementation of a Turkish legal question answering system with Retrieval-Augmented Generation (RAG).
 
+## Instructor Quick Run
+
+Validate the included custom-data example:
+
+```bash
+python scripts/validate_custom_data.py --data-dir sample_custom_data --require-benchmark
+```
+
+Run the reliable default demo:
+
+```bash
+python scripts/demo_app.py --data-dir data
+```
+
+Run a submission-style Base RAG vs Fine-tuned RAG comparison after training or providing a fine-tuned reranker checkpoint:
+
+```bash
+python scripts/train_cross_encoder_reranker.py --data-dir data --epochs 1 --batch-size 4 --max-length 128 --output-dir outputs/models/legal_cross_encoder_reranker_full_cpu_128
+
+python scripts/run_base_vs_finetuned_eval.py --data-dir data --output-dir outputs/submission_eval_bm25_vs_finetuned_reranker --base-retriever bm25 --finetuned-retriever bm25 --finetuned-reranker-model outputs/models/legal_cross_encoder_reranker_full_cpu_128
+```
+
+The fine-tuned checkpoints under `outputs/models/` are generated artifacts and are not required for the default demo. If they are not present after cloning, recreate them with the training commands above or use the documented base-model runs.
+
 ## Data
 
 Expected dataset directory:

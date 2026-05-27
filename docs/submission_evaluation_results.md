@@ -45,9 +45,15 @@ python scripts/run_base_vs_finetuned_eval.py \
   --output-dir outputs/submission_eval_bm25_vs_finetuned_reranker \
   --base-retriever bm25 \
   --finetuned-retriever bm25 \
-  --finetuned-reranker-model C:\Users\bulent\Documents\Codex\2026-05-21\NLP-Term-Project-push\outputs\models\legal_cross_encoder_reranker_full_cpu_128 \
+  --finetuned-reranker-model outputs/models/legal_cross_encoder_reranker_full_cpu_128 \
   --rerank-top-n 15 \
   --top-k 5
+```
+
+If `outputs/models/legal_cross_encoder_reranker_full_cpu_128` is not present after cloning, recreate it with:
+
+```bash
+python scripts/train_cross_encoder_reranker.py --data-dir data --epochs 1 --batch-size 4 --max-length 128 --output-dir outputs/models/legal_cross_encoder_reranker_full_cpu_128
 ```
 
 | Metric | Base BM25 RAG | Fine-tuned reranker RAG | Delta |
@@ -91,7 +97,13 @@ Commands:
 ```bash
 python scripts/evaluate_qa.py --data-dir data --retriever bm25 --generation-mode local_hf --generation-model google/flan-t5-small --top-k 3 --limit 20 --max-new-tokens 96 --output outputs/submission_eval_llm_base_flan_20.json
 
-python scripts/evaluate_qa.py --data-dir data --retriever bm25 --generation-mode local_hf --generation-model C:\Users\bulent\Documents\Codex\2026-05-21\NLP-Term-Project-push\outputs\models\flan_t5_legal_sft_smoke_512 --top-k 3 --limit 20 --max-new-tokens 96 --output outputs/submission_eval_llm_sft_flan_20.json
+python scripts/evaluate_qa.py --data-dir data --retriever bm25 --generation-mode local_hf --generation-model outputs/models/flan_t5_legal_sft_smoke_512 --top-k 3 --limit 20 --max-new-tokens 96 --output outputs/submission_eval_llm_sft_flan_20.json
+```
+
+If `outputs/models/flan_t5_legal_sft_smoke_512` is not present after cloning, recreate it with:
+
+```bash
+python scripts/train_seq2seq_generator.py --data-dir data --limit 512 --eval-size 64 --epochs 1 --batch-size 2 --grad-accum 8 --output-dir outputs/models/flan_t5_legal_sft_smoke_512
 ```
 
 | Metric | Base FLAN-T5-small | Fine-tuned FLAN-T5-small | Delta |
