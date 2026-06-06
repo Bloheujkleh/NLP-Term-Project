@@ -16,6 +16,8 @@ Run the reliable default demo:
 python scripts/demo_app.py --data-dir data
 ```
 
+The browser demo also includes a `Custom Document Test` panel. An instructor can upload a `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, or `.pdf` file, ask a question over that uploaded file, and inspect the retrieved chunks/citations in the same page.
+
 Run a submission-style Base RAG vs Fine-tuned RAG comparison after training or providing a fine-tuned reranker checkpoint:
 
 ```bash

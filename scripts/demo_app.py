@@ -2,15 +2,22 @@ from __future__ import annotations
 
 import argparse
 import html
+import io
 import json
 import math
 import re
+import warnings
 import webbrowser
+import zipfile
+import xml.etree.ElementTree as ET
 from collections import Counter
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
+
+warnings.filterwarnings("ignore", "'cgi' is deprecated.*", DeprecationWarning)
+import cgi
 
 
 SAMPLE_QUESTIONS = [
@@ -68,6 +75,77 @@ def load_docs(corpus_file: Path, limit: int | None = None) -> list[Doc]:
         if limit and len(docs) >= limit:
             break
     return docs
+
+
+def extract_docx_text(payload: bytes) -> str:
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        xml_bytes = archive.read("word/document.xml")
+    root = ET.fromstring(xml_bytes)
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    paragraphs = []
+    for paragraph in root.findall(".//w:p", namespace):
+        texts = [node.text or "" for node in paragraph.findall(".//w:t", namespace)]
+        text = "".join(texts).strip()
+        if text:
+            paragraphs.append(text)
+    return "\n".join(paragraphs)
+
+
+def extract_pdf_text(payload: bytes) -> str:
+    try:
+        from pypdf import PdfReader
+    except Exception as exc:
+        raise RuntimeError("PDF destegi icin pypdf kurulmali: pip install pypdf") from exc
+    reader = PdfReader(io.BytesIO(payload))
+    pages = []
+    for idx, page in enumerate(reader.pages, start=1):
+        page_text = page.extract_text() or ""
+        if page_text.strip():
+            pages.append(f"[Page {idx}]\n{page_text.strip()}")
+    return "\n\n".join(pages)
+
+
+def extract_uploaded_text(filename: str, payload: bytes) -> str:
+    suffix = Path(filename).suffix.lower()
+    if suffix in {".txt", ".md", ".csv", ".json", ".jsonl"}:
+        return payload.decode("utf-8", errors="ignore")
+    if suffix == ".docx":
+        return extract_docx_text(payload)
+    if suffix == ".pdf":
+        return extract_pdf_text(payload)
+    raise ValueError("Desteklenen dosya tipleri: .txt, .md, .csv, .json, .jsonl, .docx, .pdf")
+
+
+def chunk_uploaded_text(text: str, filename: str, chunk_size: int = 900, overlap: int = 150) -> list[Doc]:
+    text = re.sub(r"\r\n?", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if not text:
+        return []
+    chunks: list[Doc] = []
+    start = 0
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        chunk = text[start:end].strip()
+        if end < len(text):
+            split_at = max(chunk.rfind("."), chunk.rfind("?"), chunk.rfind("!"), chunk.rfind("\n"))
+            if split_at > int(chunk_size * 0.55):
+                chunk = chunk[: split_at + 1].strip()
+                end = start + split_at + 1
+        if chunk:
+            number = len(chunks) + 1
+            chunks.append(
+                Doc(
+                    id=f"UPLOAD_{number:03d}",
+                    title=f"{filename} - chunk {number}",
+                    text=chunk,
+                    citation=f"Uploaded file: {filename} | chunk {number}",
+                )
+            )
+        next_start = end - overlap
+        if next_start <= start:
+            next_start = start + chunk_size
+        start = next_start
+    return chunks
 
 
 class SimpleBM25:
@@ -174,8 +252,13 @@ def page(
     results: list[tuple[Doc, float]] | None = None,
     answer_mode: str = "extractive",
     generation_model: str | None = None,
+    upload_question: str = "",
+    upload_answer: str = "",
+    upload_results: list[tuple[Doc, float]] | None = None,
+    upload_message: str = "",
 ) -> bytes:
     results = results or []
+    upload_results = upload_results or []
     sample_buttons = "".join(
         f"<button name='question' value='{html.escape(q)}'>{html.escape(q)}</button>" for q in SAMPLE_QUESTIONS
     )
@@ -189,6 +272,17 @@ def page(
         </article>
         """
         for rank, (doc, score) in enumerate(results, start=1)
+    )
+    upload_source_cards = "".join(
+        f"""
+        <article class="source">
+          <div class="rank">#{rank} | score {score:.3f}</div>
+          <h3>{html.escape(doc.title)}</h3>
+          <p>{html.escape(doc.text[:900])}</p>
+          <code>{html.escape(doc.citation)}</code>
+        </article>
+        """
+        for rank, (doc, score) in enumerate(upload_results, start=1)
     )
     model_line = f" | <strong>Model:</strong> {html.escape(generation_model)}" if generation_model else ""
     body = f"""<!doctype html>
@@ -210,6 +304,7 @@ def page(
     .actions {{ display: flex; gap: 10px; align-items: center; margin-top: 10px; }}
     button {{ border: 1px solid #2e74b5; background: #2e74b5; color: white; padding: 10px 14px; border-radius: 6px; cursor: pointer; }}
     .samples button {{ margin: 6px 6px 0 0; background: white; color: #2e74b5; }}
+    input[type=file] {{ display: block; margin: 10px 0; }}
     pre {{ white-space: pre-wrap; font-size: 16px; line-height: 1.45; }}
     .source {{ margin-top: 12px; }}
     .source h3 {{ margin: 6px 0; font-size: 17px; color: #0b2545; }}
@@ -242,6 +337,19 @@ def page(
     </section>
     {f'<section class="panel"><h2>Answer</h2><pre>{html.escape(answer)}</pre></section>' if answer else ''}
     {f'<section><h2>Retrieved sources</h2>{source_cards}</section>' if results else ''}
+    <section class="panel">
+      <h2>Custom Document Test</h2>
+      <form method="post" action="/upload_ask" enctype="multipart/form-data">
+        <label for="custom_file"><strong>Upload a document</strong></label>
+        <input id="custom_file" name="custom_file" type="file" accept=".txt,.md,.csv,.json,.jsonl,.docx,.pdf">
+        <label for="upload_question"><strong>Question for uploaded document</strong></label>
+        <textarea id="upload_question" name="upload_question">{html.escape(upload_question)}</textarea>
+        <div class="actions"><button type="submit">Ask Uploaded Document</button></div>
+      </form>
+      {f'<p><strong>{html.escape(upload_message)}</strong></p>' if upload_message else ''}
+    </section>
+    {f'<section class="panel"><h2>Uploaded Document Answer</h2><pre>{html.escape(upload_answer)}</pre></section>' if upload_answer else ''}
+    {f'<section><h2>Uploaded document sources</h2>{upload_source_cards}</section>' if upload_results else ''}
   </main>
 </body>
 </html>"""
@@ -257,6 +365,9 @@ def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode
             self.wfile.write(page(answer_mode=answer_mode, generation_model=generation_model))
 
         def do_POST(self) -> None:
+            if self.path == "/upload_ask":
+                self.handle_upload_ask()
+                return
             length = int(self.headers.get("Content-Length", "0"))
             payload = self.rfile.read(length).decode("utf-8")
             question = parse_qs(payload).get("question", [""])[0].strip()
@@ -266,6 +377,56 @@ def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(page(question, answer, results, answer_mode=answer_mode, generation_model=generation_model))
+
+        def handle_upload_ask(self) -> None:
+            upload_question = ""
+            upload_answer = ""
+            upload_results: list[tuple[Doc, float]] = []
+            upload_message = ""
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                payload = self.rfile.read(content_length)
+                form = cgi.FieldStorage(
+                    fp=io.BytesIO(payload),
+                    headers=self.headers,
+                    environ={
+                        "REQUEST_METHOD": "POST",
+                        "CONTENT_TYPE": self.headers.get("Content-Type", ""),
+                        "CONTENT_LENGTH": str(len(payload)),
+                    },
+                )
+                upload_question = str(form.getfirst("upload_question", "")).strip()
+                file_item = form["custom_file"] if "custom_file" in form else None
+                if not upload_question:
+                    raise ValueError("Lutfen yuklenen dokuman icin bir soru yazin.")
+                if file_item is None or not getattr(file_item, "filename", ""):
+                    raise ValueError("Lutfen .txt, .md, .docx veya .pdf dosyasi secin.")
+                filename = Path(file_item.filename).name
+                payload = file_item.file.read()
+                text = extract_uploaded_text(filename, payload)
+                upload_docs = chunk_uploaded_text(text, filename)
+                if not upload_docs:
+                    raise ValueError("Yuklenen dosyadan okunabilir metin cikarilamadi.")
+                custom_retriever = SimpleBM25(upload_docs)
+                upload_results = custom_retriever.search(upload_question, top_k=5)
+                upload_answer = ExtractiveGenerator().generate(upload_question, upload_results)
+                upload_message = f"{filename} indexed with {len(upload_docs)} chunks."
+            except Exception as exc:
+                upload_message = f"Upload error: {exc}"
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(
+                page(
+                    answer_mode=answer_mode,
+                    generation_model=generation_model,
+                    upload_question=upload_question,
+                    upload_answer=upload_answer,
+                    upload_results=upload_results,
+                    upload_message=upload_message,
+                )
+            )
 
         def log_message(self, format: str, *args) -> None:
             return

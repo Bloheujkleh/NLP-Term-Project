@@ -20,6 +20,15 @@ Open:
 http://127.0.0.1:7860
 ```
 
+## Custom Document Upload
+
+The same browser page has a `Custom Document Test` panel. Use it when the instructor wants to upload a file during or after the demo:
+
+1. Choose a `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, or `.pdf` file.
+2. Write a question about the uploaded file.
+3. Click `Ask Uploaded Document`.
+4. The app builds a temporary BM25 index over the uploaded file, returns a source-grounded extractive answer, and lists the retrieved uploaded-file chunks as citations.
+
 If the browser app fails for any reason, use the CLI fallback:
 
 ```bash
