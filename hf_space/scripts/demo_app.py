@@ -249,12 +249,130 @@ class LocalHFGenerator(AnswerGenerator):
         return self.clean_answer(answer, results[0][0])
 
 
+class GuardedCausalGenerator(AnswerGenerator):
+    def __init__(self, model_name: str, max_new_tokens: int = 180) -> None:
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        self.model_name = model_name
+        self.max_new_tokens = max_new_tokens
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float32,
+            low_cpu_mem_usage=True,
+            trust_remote_code=True,
+        )
+        self.model.eval()
+        self.fallback = ExtractiveGenerator()
+
+    @staticmethod
+    def build_prompt(question: str, results: list[tuple[Doc, float]]) -> str:
+        context = "\n\n".join(
+            f"[{rank}] Baslik: {doc.title}\nKaynak: {doc.citation}\nMetin: {doc.text[:1200]}"
+            for rank, (doc, _score) in enumerate(results[:3], start=1)
+        )
+        return (
+            "Sen Turk hukuku icin kaynak kontrollu bir RAG asistanisin.\n"
+            "Kurallar:\n"
+            "1. Yalnizca verilen KAYNAKLAR bolumundeki bilgilere dayan.\n"
+            "2. Kaynakta olmayan bilgi, madde numarasi veya ceza uretme.\n"
+            "3. Kaynaklar yeterli degilse 'Yuklenen kaynaklarda bu soruya yeterli cevap yok.' de.\n"
+            "4. Cevabi 2-4 cumlelik Turkce ve net yaz.\n"
+            "5. En sonda mutlaka 'Kaynak: ...' satiri ekle ve en uygun kaynak etiketini kullan.\n\n"
+            "Kaynakta soru ile ilgili ceza, sure, tutar, hak veya sart acikca yaziyorsa "
+            "bu kritik bilgiyi cevaba aynen dahil et.\n\n"
+            f"KAYNAKLAR:\n{context}\n\n"
+            f"SORU: {question}\n\n"
+            "CEVAP:"
+        )
+
+    @staticmethod
+    def is_supported(answer: str, results: list[tuple[Doc, float]]) -> bool:
+        if not answer or len(answer.split()) < 8 or "Kaynak:" not in answer:
+            return False
+        top_context_tokens = set(tokenize(results[0][0].text))
+        answer_token_set = set(tokenize(answer))
+        critical_terms = {
+            "muebbet",
+            "müebbet",
+            "hapis",
+            "cezasi",
+            "cezası",
+            "tazminat",
+            "sure",
+            "süre",
+            "gun",
+            "gün",
+            "ay",
+            "yil",
+            "yıl",
+            "hak",
+            "sart",
+            "şart",
+        }
+        missing_critical = [
+            term for term in critical_terms if term in top_context_tokens and term not in answer_token_set
+        ]
+        if len(missing_critical) >= 2:
+            return False
+        context_tokens = set(tokenize(" ".join(doc.text for doc, _score in results[:3])))
+        answer_tokens = [tok for tok in tokenize(answer) if len(tok) > 3]
+        if not answer_tokens:
+            return False
+        overlap = sum(1 for tok in answer_tokens if tok in context_tokens) / len(answer_tokens)
+        return overlap >= 0.55
+
+    @staticmethod
+    def clean_generated_text(text: str, fallback_doc: Doc) -> str:
+        text = text.strip()
+        if "CEVAP:" in text:
+            text = text.split("CEVAP:", 1)[-1].strip()
+        text = re.split(r"\n\s*KAYNAKLAR:|\n\s*SORU:", text, maxsplit=1)[0].strip()
+        text = re.sub(r"\s+", " ", text).strip()
+        text = text.replace(" Kaynak:", "\n\nKaynak:")
+        if "Kaynak:" not in text:
+            text = f"{text}\n\nKaynak: {fallback_doc.citation}"
+        return text
+
+    def generate(self, question: str, results: list[tuple[Doc, float]]) -> str:
+        if not results:
+            return "Bu soru icin kaynak bulunamadi."
+        try:
+            prompt = self.build_prompt(question, results)
+            if hasattr(self.tokenizer, "apply_chat_template"):
+                messages = [
+                    {"role": "system", "content": "Kaynak disina cikmayan Turkce RAG asistani."},
+                    {"role": "user", "content": prompt},
+                ]
+                prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1800)
+            output_ids = self.model.generate(
+                **inputs,
+                max_new_tokens=self.max_new_tokens,
+                do_sample=False,
+                pad_token_id=self.tokenizer.eos_token_id,
+            )
+            generated_ids = output_ids[0][inputs["input_ids"].shape[-1] :]
+            answer = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+            answer = self.clean_generated_text(answer, results[0][0])
+            if self.is_supported(answer, results):
+                return answer
+        except Exception as exc:
+            print(f"Guarded causal generation failed, using extractive fallback: {exc}")
+        return self.fallback.generate(question, results)
+
+
 def build_generator(answer_mode: str, generation_model: str | None, max_new_tokens: int) -> AnswerGenerator:
     if answer_mode == "extractive":
         return ExtractiveGenerator()
     if not generation_model:
-        raise ValueError("--generation-model is required when --answer-mode local_hf")
-    return LocalHFGenerator(generation_model, max_new_tokens=max_new_tokens)
+        raise ValueError("--generation-model is required for local model answer modes")
+    if answer_mode == "local_hf":
+        return LocalHFGenerator(generation_model, max_new_tokens=max_new_tokens)
+    if answer_mode == "guarded_causal":
+        return GuardedCausalGenerator(generation_model, max_new_tokens=max_new_tokens)
+    raise ValueError(f"Unknown answer mode: {answer_mode}")
 
 
 def page(
@@ -420,7 +538,7 @@ def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode
                     raise ValueError("Yuklenen dosyadan okunabilir metin cikarilamadi.")
                 custom_retriever = SimpleBM25(upload_docs)
                 upload_results = custom_retriever.search(upload_question, top_k=5)
-                upload_answer = ExtractiveGenerator().generate(upload_question, upload_results)
+                upload_answer = generator.generate(upload_question, upload_results)
                 upload_message = f"{filename} indexed with {len(upload_docs)} chunks."
             except Exception as exc:
                 upload_message = f"Upload error: {exc}"
@@ -452,7 +570,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=7860)
-    parser.add_argument("--answer-mode", choices=["extractive", "local_hf"], default="extractive")
+    parser.add_argument("--answer-mode", choices=["extractive", "local_hf", "guarded_causal"], default="extractive")
     parser.add_argument("--generation-model", default=None)
     parser.add_argument("--max-new-tokens", type=int, default=128)
     parser.add_argument("--no-browser", action="store_true")

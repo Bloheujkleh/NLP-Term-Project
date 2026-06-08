@@ -16,11 +16,21 @@ testing.
 ```text
 Question
 -> BM25 retrieval
--> extractive source-grounded answer
+-> guarded local LLM answer generation
+-> extractive fallback if the LLM answer is unsupported
 -> citation + retrieved sources
 ```
 
-The deployed app does not require GPU, external APIs, or large model downloads.
+The deployed app uses `Qwen/Qwen2.5-0.5B-Instruct` by default because it is a
+small instruction-tuned causal language model that fits the RAG pattern better
+than the earlier FLAN-T5 smoke-test path. It receives the retrieved chunks in the
+prompt and is instructed to answer only from those chunks. If the generated
+answer is missing a citation, too short, or weakly supported by the retrieved
+context, the app automatically falls back to the extractive source-grounded
+answer.
+
+The deployed app does not require GPU or external APIs. First startup may take
+longer while Hugging Face downloads the model.
 
 ## Hugging Face Space Setup
 
@@ -88,4 +98,3 @@ The deployment package was locally smoke-tested with:
 
 - GET `/ask`: returns the demo page.
 - POST `/ask` with a legal question: returns answer and retrieved sources.
-

@@ -17,12 +17,19 @@ This Space runs the deployment version of the Turkish Legal RAG project.
 ```text
 Question
 -> BM25 retrieval over Turkish legal corpus
--> extractive source-grounded answer
+-> guarded local LLM answer generation
+-> extractive fallback when the LLM answer is unsupported
 -> citation / retrieved sources
 ```
 
-The deployment intentionally uses the lightweight BM25 + extractive configuration.
-It does not require GPU, paid APIs, or downloading large language models.
+The default hosted mode uses `Qwen/Qwen2.5-0.5B-Instruct` as a lightweight
+instruction model. It receives only the retrieved legal chunks as context and is
+prompted not to use outside knowledge. If the generated answer is too short,
+missing a citation, or weakly supported by the retrieved chunks, the app falls
+back to the extractive source-grounded answer.
+
+The app does not require paid APIs. It can run on CPU, although first startup can
+take longer while the model is downloaded.
 
 ## Instructor Custom Document Test
 
@@ -45,5 +52,6 @@ and `source_id`.
 ## Notes
 
 Fine-tuned embedding, reranker, and FLAN-T5 experiments are reported in the
-technical report. The live deployment uses the most reliable measured demo
-configuration for source-grounded legal QA.
+technical report. The hosted demo adds a more appropriate instruction-style LLM
+answering path for instructor custom-document testing while keeping citation and
+extractive fallback guardrails.
