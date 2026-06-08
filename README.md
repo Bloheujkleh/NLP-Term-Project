@@ -2,6 +2,28 @@
 
 This repository contains a step-by-step implementation of a Turkish legal question answering system with Retrieval-Augmented Generation (RAG).
 
+## Instructor Web Deployment
+
+For a Hugging Face Space or instructor-facing hosted demo, use the lightweight
+deployment package in:
+
+```text
+hf_space/
+```
+
+Create a Hugging Face Space with **Docker** SDK and upload the contents of
+`hf_space/` as the Space root. This hosted version runs the reliable default
+pipeline:
+
+```text
+BM25 retrieval -> extractive source-grounded answer -> citation
+```
+
+It includes a `Custom Document Test` panel so the instructor can upload their
+own `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, or `.pdf` file and ask
+questions over that uploaded document. See
+`HUGGINGFACE_DEPLOYMENT.md` for details.
+
 ## Instructor Quick Run
 
 Validate the included custom-data example:
