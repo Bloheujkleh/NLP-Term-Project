@@ -17,27 +17,32 @@ This Space runs the deployment version of the Turkish Legal RAG project.
 ```text
 Question
 -> BM25 retrieval over Turkish legal corpus
--> guarded local LLM answer generation
--> extractive fallback when the LLM answer is unsupported
+-> source-grounded extractive answer by default
 -> citation / retrieved sources
 ```
 
-The default hosted mode uses the fine-tuned model
-`felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft`. It was trained from
-`Qwen/Qwen2.5-0.5B-Instruct` with LoRA on the Turkish legal RAG source-grounded
-answer dataset. To override the model, set:
+The default hosted mode is `ANSWER_MODE=extractive` because it is fast on CPU,
+auditable, and robust for instructor-provided custom documents. The fine-tuned
+LLM is still available as an optional guarded generation mode:
+
+```text
+ANSWER_MODE=guarded_causal
+GENERATION_MODEL=felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft
+```
+
+That model was trained from `Qwen/Qwen2.5-0.5B-Instruct` with LoRA on the Turkish
+legal RAG source-grounded answer dataset. To override the model, set:
 
 ```text
 GENERATION_MODEL=<model-id>
 ```
 
-The selected model receives only the retrieved legal chunks as context and is
+In guarded LLM mode, the selected model receives only the retrieved legal chunks as context and is
 prompted not to use outside knowledge. If the generated answer is too short,
 missing a citation, or weakly supported by the retrieved chunks, the app falls
 back to the extractive source-grounded answer.
 
-The app does not require paid APIs. It can run on CPU, although first startup can
-take longer while the model is downloaded.
+The app does not require paid APIs and the default mode runs quickly on CPU.
 
 ## Instructor Custom Document Test
 

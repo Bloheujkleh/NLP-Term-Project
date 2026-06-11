@@ -46,7 +46,7 @@ def main() -> None:
     limit = int(limit_env) if limit_env else None
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "7860"))
-    answer_mode = os.environ.get("ANSWER_MODE", "guarded_causal")
+    answer_mode = os.environ.get("ANSWER_MODE", "extractive")
     generation_model = os.environ.get(
         "GENERATION_MODEL",
         "felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft",

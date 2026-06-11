@@ -205,6 +205,12 @@ def normalize_text(text: str) -> str:
     return " ".join(tokenize(text))
 
 
+def contains_normalized(haystack: str, needle: str) -> bool:
+    norm_haystack = normalize_text(haystack)
+    norm_needle = normalize_text(needle)
+    return bool(norm_needle and norm_needle in norm_haystack)
+
+
 def token_f1(prediction: str, gold: str) -> float:
     pred_tokens = tokenize(prediction)
     gold_tokens = tokenize(gold)
@@ -282,11 +288,11 @@ def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator:
         if gold_source:
             joined_first = f"{result_ids[0]} {result_citations[0]}" if result_ids else ""
             joined_all = " ".join(result_ids + result_citations)
-            if result_ids and gold_source in joined_first:
+            if result_ids and contains_normalized(joined_first, gold_source):
                 top1 += 1
-            if gold_source in joined_all:
+            if contains_normalized(joined_all, gold_source):
                 top5 += 1
-            if gold_source in answer:
+            if contains_normalized(answer, gold_source):
                 citation += 1
         total += 1
         if len(examples) < 3:
@@ -348,6 +354,13 @@ class AnswerGenerator:
 
 class ExtractiveGenerator(AnswerGenerator):
     @staticmethod
+    def citation_with_id(doc: Doc) -> str:
+        citation = doc.citation
+        if doc.id and not contains_normalized(citation, doc.id):
+            citation = f"{citation} - {doc.id}"
+        return citation
+
+    @staticmethod
     def clean_excerpt(doc: Doc) -> str:
         text = re.sub(r"\s+", " ", doc.text).strip()
         title = re.sub(r"\s+", " ", doc.title).strip()
@@ -358,7 +371,7 @@ class ExtractiveGenerator(AnswerGenerator):
         return text or doc.text
 
     @staticmethod
-    def select_relevant_excerpt(question: str, doc: Doc, max_sentences: int = 3) -> str:
+    def select_relevant_excerpt(question: str, doc: Doc, max_sentences: int = 2) -> str:
         text = ExtractiveGenerator.clean_excerpt(doc)
         sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+|\n+", text) if part.strip()]
         if len(sentences) <= 1:
@@ -384,7 +397,7 @@ class ExtractiveGenerator(AnswerGenerator):
             return "Bu soru icin kaynak bulunamadi."
         best = results[0][0]
         excerpt = self.select_relevant_excerpt(question, best)
-        return f"Kaynaga gore: {excerpt}\n\nKaynak: {best.citation}"
+        return f"Kaynaga gore: {excerpt}\n\nKaynak: {self.citation_with_id(best)}"
 
 
 class LocalHFGenerator(AnswerGenerator):
@@ -474,6 +487,11 @@ class GuardedCausalGenerator(AnswerGenerator):
     def is_supported(answer: str, results: list[tuple[Doc, float]]) -> bool:
         if not answer or len(answer.split()) < 8 or "Kaynak:" not in answer:
             return False
+        answer_part = answer.split("Kaynak:", 1)[0].strip()
+        if len(tokenize(answer_part)) < 6:
+            return False
+        if re.search(r"\bSoru\s*:", answer_part, flags=re.IGNORECASE):
+            return False
         top_context_tokens = set(tokenize(results[0][0].text))
         answer_token_set = set(tokenize(answer))
         critical_terms = {
@@ -514,12 +532,13 @@ class GuardedCausalGenerator(AnswerGenerator):
         text = re.split(r"\n\s*KAYNAKLAR:|\n\s*SORU:", text, maxsplit=1)[0].strip()
         text = re.sub(r"\s+", " ", text).strip()
         answer_part = text.split("Kaynak:", 1)[0].strip()
+        answer_part = re.split(r"\bSoru\s*:", answer_part, maxsplit=1, flags=re.IGNORECASE)[0].strip()
         sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", answer_part) if part.strip()]
         if sentences:
             text = " ".join(sentences[:2])
         text = text.replace(" Kaynak:", "\n\nKaynak:")
         if "Kaynak:" not in text:
-            text = f"{text}\n\nKaynak: {fallback_doc.citation}"
+            text = f"{text}\n\nKaynak: {ExtractiveGenerator.citation_with_id(fallback_doc)}"
         return text
 
     def generate(self, question: str, results: list[tuple[Doc, float]]) -> str:
@@ -658,7 +677,7 @@ def page(
       <h2>Custom Document Test</h2>
       <form method="post" action="/upload_ask" enctype="multipart/form-data">
         <label for="custom_file"><strong>Upload a document</strong></label>
-        <input id="custom_file" name="custom_file" type="file" accept=".txt,.md,.csv,.json,.jsonl,.docx,.pdf">
+        <input id="custom_file" name="custom_file" type="file" accept=".zip,.txt,.md,.csv,.json,.jsonl,.docx,.pdf">
         <label for="upload_question"><strong>Question for uploaded document</strong></label>
         <textarea id="upload_question" name="upload_question">{html.escape(upload_question)}</textarea>
         <div class="actions"><button type="submit">Ask Uploaded Document</button></div>
