@@ -23,7 +23,14 @@ Question
 ```
 
 The default hosted mode uses `Qwen/Qwen2.5-0.5B-Instruct` as a lightweight
-instruction model. It receives only the retrieved legal chunks as context and is
+instruction model. For the best final submission, train and push a legal RAG
+LoRA/merged model with `colab_qwen_lora_finetune.ipynb`, then set:
+
+```text
+GENERATION_MODEL=<your-hf-username>/turkish-legal-qwen2-5-0-5b-rag-sft
+```
+
+The selected model receives only the retrieved legal chunks as context and is
 prompted not to use outside knowledge. If the generated answer is too short,
 missing a citation, or weakly supported by the retrieved chunks, the app falls
 back to the extractive source-grounded answer.

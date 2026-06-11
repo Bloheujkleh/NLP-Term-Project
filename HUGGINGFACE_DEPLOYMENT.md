@@ -23,11 +23,18 @@ Question
 
 The deployed app uses `Qwen/Qwen2.5-0.5B-Instruct` by default because it is a
 small instruction-tuned causal language model that fits the RAG pattern better
-than the earlier FLAN-T5 smoke-test path. It receives the retrieved chunks in the
-prompt and is instructed to answer only from those chunks. If the generated
-answer is missing a citation, too short, or weakly supported by the retrieved
-context, the app automatically falls back to the extractive source-grounded
-answer.
+than the earlier FLAN-T5 smoke-test path. For the final/highest-quality upload,
+run `colab_qwen_lora_finetune.ipynb`, push the merged fine-tuned Qwen model to
+Hugging Face, and set this Space environment variable:
+
+```text
+GENERATION_MODEL=<your-hf-username>/turkish-legal-qwen2-5-0-5b-rag-sft
+```
+
+The selected Qwen model receives the retrieved chunks in the prompt and is
+instructed to answer only from those chunks. If the generated answer is missing a
+citation, too short, or weakly supported by the retrieved context, the app
+automatically falls back to the extractive source-grounded answer.
 
 The deployed app does not require GPU or external APIs. First startup may take
 longer while Hugging Face downloads the model.
