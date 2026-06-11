@@ -51,7 +51,7 @@ def main() -> None:
         "GENERATION_MODEL",
         "felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft",
     )
-    max_new_tokens = int(os.environ.get("MAX_NEW_TOKENS", "180"))
+    max_new_tokens = int(os.environ.get("MAX_NEW_TOKENS", "80"))
     if answer_mode == "extractive":
         generation_model = None
 

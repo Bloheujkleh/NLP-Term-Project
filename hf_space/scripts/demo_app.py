@@ -452,7 +452,7 @@ class GuardedCausalGenerator(AnswerGenerator):
     @staticmethod
     def build_prompt(question: str, results: list[tuple[Doc, float]]) -> str:
         context = "\n\n".join(
-            f"[{rank}] Baslik: {doc.title}\nKaynak: {doc.citation}\nMetin: {doc.text[:1200]}"
+            f"[{rank}] Baslik: {doc.title}\nKaynak: {doc.citation}\nMetin: {doc.text[:700]}"
             for rank, (doc, _score) in enumerate(results[:3], start=1)
         )
         return (
@@ -533,7 +533,7 @@ class GuardedCausalGenerator(AnswerGenerator):
                     {"role": "user", "content": prompt},
                 ]
                 prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1800)
+            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1200)
             output_ids = self.model.generate(
                 **inputs,
                 max_new_tokens=self.max_new_tokens,
