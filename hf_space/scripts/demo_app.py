@@ -200,6 +200,7 @@ def chunk_uploaded_text(text: str, filename: str, chunk_size: int = 900, overlap
     if not text:
         return []
     chunks: list[Doc] = []
+    safe_stem = re.sub(r"[^A-Za-z0-9]+", "_", Path(filename).stem).strip("_").upper() or "UPLOAD"
     start = 0
     while start < len(text):
         end = min(start + chunk_size, len(text))
@@ -213,7 +214,7 @@ def chunk_uploaded_text(text: str, filename: str, chunk_size: int = 900, overlap
             number = len(chunks) + 1
             chunks.append(
                 Doc(
-                    id=f"UPLOAD_{number:03d}",
+                    id=f"{safe_stem}_{number:03d}",
                     title=f"{filename} - chunk {number}",
                     text=chunk,
                     citation=f"Uploaded file: {filename} | chunk {number}",
