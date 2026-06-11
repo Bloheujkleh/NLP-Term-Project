@@ -39,6 +39,14 @@ def tokenize(text: str) -> list[str]:
     return re.findall(r"\w+", text.lower(), flags=re.UNICODE)
 
 
+def list_from_mapping(mapping: dict, keys: tuple[str, ...]):
+    for key in keys:
+        value = mapping.get(key)
+        if isinstance(value, list):
+            return value
+    return None
+
+
 def iter_jsonl(path: Path):
     with path.open("r", encoding="utf-8") as f:
         for line in f:
@@ -123,7 +131,10 @@ def docs_from_structured_rows(filename: str, payload: bytes) -> list[Doc]:
             rows = [json.loads(line) for line in payload.decode("utf-8-sig", errors="ignore").splitlines() if line.strip()]
         elif suffix == ".json":
             loaded = json.loads(payload.decode("utf-8-sig", errors="ignore"))
-            rows = loaded if isinstance(loaded, list) else loaded.get("documents") or loaded.get("data") or [loaded]
+            rows = loaded if isinstance(loaded, list) else list_from_mapping(
+                loaded,
+                ("documents", "docs", "corpus", "data", "items", "records", "chunks", "passages"),
+            ) or [loaded]
         else:
             return []
     except Exception:
@@ -231,6 +242,13 @@ def normalize_text(text: str) -> str:
     return " ".join(tokenize(text))
 
 
+def answer_body_for_metric(answer: str) -> str:
+    body = answer.split("Kaynak:", 1)[0]
+    body = re.sub(r"^\s*Kaynaga gore:\s*", "", body, flags=re.IGNORECASE)
+    body = re.sub(r"^\s*Kaynağa göre:\s*", "", body, flags=re.IGNORECASE)
+    return body.strip()
+
+
 def contains_normalized(haystack: str, needle: str) -> bool:
     norm_haystack = normalize_text(haystack)
     norm_needle = normalize_text(needle)
@@ -289,7 +307,10 @@ def parse_benchmark_rows(filename: str, payload: bytes) -> list[dict]:
         rows = [json.loads(line) for line in raw.splitlines() if line.strip()]
     elif suffix == ".json":
         loaded = json.loads(raw)
-        rows = loaded if isinstance(loaded, list) else loaded.get("questions") or loaded.get("data") or loaded.get("benchmark")
+        rows = loaded if isinstance(loaded, list) else list_from_mapping(
+            loaded,
+            ("questions", "qas", "qa", "examples", "benchmark", "data", "items", "records"),
+        )
     else:
         raise ValueError("Benchmark dosyasi .json, .jsonl veya .zip olmali.")
     if not isinstance(rows, list):
@@ -304,6 +325,7 @@ def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator:
         raise ValueError("Benchmark icinde soru bulunamadi.")
     total = 0
     exact = 0
+    contains_gold = 0
     f1_sum = 0.0
     top1 = 0
     top5 = 0
@@ -330,10 +352,13 @@ def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator:
         answer = generator.generate(question, results)
         result_ids = [doc.id for doc, _score in results]
         result_citations = [doc.citation for doc, _score in results]
-        f1 = token_f1(answer, gold_answer) if gold_answer else 0.0
+        answer_body = answer_body_for_metric(answer)
+        f1 = token_f1(answer_body, gold_answer) if gold_answer else 0.0
         f1_sum += f1
-        if gold_answer and normalize_text(answer) == normalize_text(gold_answer):
+        if gold_answer and normalize_text(answer_body) == normalize_text(gold_answer):
             exact += 1
+        if gold_answer and contains_normalized(answer_body, gold_answer):
+            contains_gold += 1
         if gold_sources:
             joined_first = f"{result_ids[0]} {result_citations[0]}" if result_ids else ""
             joined_all = " ".join(result_ids + result_citations)
@@ -367,6 +392,7 @@ def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator:
     lines = [
         f"Evaluated questions: {total}",
         f"Exact Match: {exact / total:.3f}" if has_gold_answer else "Exact Match: n/a",
+        f"Answer Contains Gold: {contains_gold / total:.3f}" if has_gold_answer else "Answer Contains Gold: n/a",
         f"Token F1: {f1_sum / total:.3f}" if has_gold_answer else "Token F1: n/a",
         f"Top-1 Source Hit: {top1 / total:.3f}" if has_gold_source else "Top-1 Source Hit: n/a",
         f"Top-5 Source Hit: {top5 / total:.3f}" if has_gold_source else "Top-5 Source Hit: n/a",

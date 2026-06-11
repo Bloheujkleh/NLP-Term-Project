@@ -56,9 +56,11 @@ The lower panel of the demo supports instructor-provided documents:
 
 The app also includes a **Custom Benchmark Evaluation** panel. The instructor can
 upload a custom corpus/document collection and a benchmark `.json`/`.jsonl` file
-with fields such as `question`, `gold_answer`, and `source_id`. The app reports
-Exact Match, Token F1, Top-1/Top-5 Source Hit, and Citation Accuracy for the
-uploaded benchmark.
+with fields such as `question`, `gold_answer`, and `source_id`. Common aliases
+such as `query`, `answer`, `answers`, `relevant_documents`, `doc_id`, and
+`page_content` are also accepted. The app reports Exact Match, Answer Contains
+Gold, Token F1, Top-1/Top-5 Source Hit, and Citation Accuracy for the uploaded
+benchmark.
 
 ## Included Data
 
