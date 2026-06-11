@@ -20,8 +20,8 @@ BM25 retrieval -> extractive source-grounded answer -> citation
 ```
 
 It includes a `Custom Document Test` panel so the instructor can upload their
-own `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, or `.pdf` file and ask
-questions over that uploaded document. See
+own `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, `.pdf`, or `.zip` file and ask
+questions over that uploaded document or document collection. See
 `HUGGINGFACE_DEPLOYMENT.md` for details.
 
 ## Instructor Quick Run
@@ -38,7 +38,16 @@ Run the reliable default demo:
 python scripts/demo_app.py --data-dir data
 ```
 
-The browser demo also includes a `Custom Document Test` panel. An instructor can upload a `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, or `.pdf` file, ask a question over that uploaded file, and inspect the retrieved chunks/citations in the same page.
+The browser demo also includes a `Custom Document Test` panel. An instructor can upload a `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, `.pdf`, or `.zip` file, ask a question over that uploaded file or document collection, and inspect the retrieved chunks/citations in the same page.
+
+The hosted Hugging Face Space defaults to the fast and robust extractive mode for
+custom-data testing. The fine-tuned Qwen model is available as an optional
+guarded generation mode through Space environment variables:
+
+```text
+ANSWER_MODE=guarded_causal
+GENERATION_MODEL=felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft
+```
 
 Run a submission-style Base RAG vs Fine-tuned RAG comparison after training or providing a fine-tuned reranker checkpoint:
 

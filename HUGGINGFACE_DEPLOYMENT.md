@@ -16,28 +16,31 @@ testing.
 ```text
 Question
 -> BM25 retrieval
--> guarded local LLM answer generation
--> extractive fallback if the LLM answer is unsupported
+-> source-grounded extractive answer by default
 -> citation + retrieved sources
 ```
 
-The deployed app uses the fine-tuned model
-`felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft` by default. This model was
-trained from `Qwen/Qwen2.5-0.5B-Instruct` with LoRA on the Turkish legal RAG
-source-grounded answer dataset. To override the generator model, set this Space
-environment variable:
+The deployed app defaults to `ANSWER_MODE=extractive`. This is the safest mode
+for instructor custom-data testing because it is fast on CPU, always grounded in
+retrieved chunks, and exposes a citation/source id for every answer.
+
+The fine-tuned model `felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft` is
+available as an optional guarded generation mode. It was trained from
+`Qwen/Qwen2.5-0.5B-Instruct` with LoRA on the Turkish legal RAG source-grounded
+answer dataset. To enable it, set these Space environment variables:
 
 ```text
+ANSWER_MODE=guarded_causal
 GENERATION_MODEL=<model-id>
 ```
 
-The selected Qwen model receives the retrieved chunks in the prompt and is
+In guarded LLM mode, the selected Qwen model receives the retrieved chunks in the prompt and is
 instructed to answer only from those chunks. If the generated answer is missing a
 citation, too short, or weakly supported by the retrieved context, the app
 automatically falls back to the extractive source-grounded answer.
 
-The deployed app does not require GPU or external APIs. First startup may take
-longer while Hugging Face downloads the model.
+The deployed app does not require GPU or external APIs. Default extractive mode
+does not download a generator model and is designed to start quickly on CPU.
 
 ## Hugging Face Space Setup
 

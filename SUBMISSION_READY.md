@@ -19,6 +19,8 @@ The original `ervagedikli/Turkish-Law-RAG-Optimization` repository could not be 
 ## Main Files To Submit
 
 ```text
+Hosted demo: https://huggingface.co/spaces/felinabulent/turkish-legal-rag-demo
+GitHub branch: https://github.com/Bloheujkleh/NLP-Term-Project/tree/custom-submission-support-2026-05-25
 deliverables/Turkish_Legal_RAG_Final_Report.docx
 deliverables/Turkish_Legal_RAG_Presentation.pptx
 README.md
@@ -62,4 +64,35 @@ The final live demo uses the most reliable measured configuration:
 BM25 retrieval -> extractive source-grounded answer -> citation
 ```
 
-Fine-tuned embedding, reranker, and FLAN-T5 generator experiments are implemented and documented for ablation. The latest benchmark checks show that fine-tuning does not automatically improve every component, so the final system is selected based on measured citation reliability and source-hit performance.
+The hosted Space also includes the fine-tuned Qwen model as an optional guarded
+generation path, but the default hosted mode is extractive because the instructor
+will test with custom documents and CPU-only hosting. This keeps responses fast,
+auditable, and citation-safe.
+
+Fine-tuned embedding, reranker, FLAN-T5, and Qwen generator experiments are
+implemented/documented for ablation. The latest benchmark checks show that
+fine-tuning does not automatically improve every component, so the final system
+is selected based on measured citation reliability and source-hit performance.
+
+## Morning Space Upload Command
+
+Run this in the already-authenticated Colab notebook to publish the latest
+deployment folder:
+
+```python
+%cd /content/NLP-Term-Project
+
+!git fetch origin custom-submission-support-2026-05-25
+!git reset --hard origin/custom-submission-support-2026-05-25
+
+from huggingface_hub import upload_folder
+
+upload_folder(
+    folder_path="hf_space",
+    repo_id="felinabulent/turkish-legal-rag-demo",
+    repo_type="space",
+    commit_message="Deploy robust final custom-data RAG app"
+)
+
+print("SPACE UPLOAD OK")
+```
