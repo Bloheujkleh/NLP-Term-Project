@@ -132,13 +132,38 @@ def docs_from_structured_rows(filename: str, payload: bytes) -> list[Doc]:
     for idx, row in enumerate(rows, start=1):
         if not isinstance(row, dict):
             continue
-        text = str(row.get("text") or row.get("content") or row.get("passage") or row.get("document") or "").strip()
+        text = first_text(
+            row.get("text"),
+            row.get("content"),
+            row.get("page_content"),
+            row.get("passage"),
+            row.get("passage_text"),
+            row.get("chunk"),
+            row.get("document"),
+            row.get("body"),
+        )
         if not text:
             continue
         metadata = row.get("metadata") or {}
-        doc_id = str(row.get("id") or row.get("source_id") or metadata.get("chunk_id") or f"{Path(filename).stem}_{idx}")
-        title = str(row.get("title") or metadata.get("title") or metadata.get("category") or Path(filename).name)
-        citation = str(row.get("citation") or row.get("citation_label") or metadata.get("citation_label") or f"{title} - {doc_id}")
+        doc_id = first_text(
+            row.get("id"),
+            row.get("source_id"),
+            row.get("doc_id"),
+            row.get("document_id"),
+            row.get("chunk_id"),
+            metadata.get("chunk_id"),
+            metadata.get("doc_id"),
+            f"{Path(filename).stem}_{idx}",
+        )
+        title = first_text(row.get("title"), metadata.get("title"), metadata.get("category"), Path(filename).name)
+        citation = first_text(
+            row.get("citation"),
+            row.get("citation_label"),
+            row.get("source"),
+            metadata.get("citation_label"),
+            metadata.get("source"),
+            f"{title} - {doc_id}",
+        )
         docs.append(Doc(doc_id, title, text, citation))
     return docs
 
@@ -211,6 +236,25 @@ def contains_normalized(haystack: str, needle: str) -> bool:
     return bool(norm_needle and norm_needle in norm_haystack)
 
 
+def as_list(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, tuple):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def first_text(*values) -> str:
+    for value in values:
+        items = as_list(value)
+        if items:
+            return items[0]
+    return ""
+
+
 def token_f1(prediction: str, gold: str) -> float:
     pred_tokens = tokenize(prediction)
     gold_tokens = tokenize(gold)
@@ -252,7 +296,7 @@ def parse_benchmark_rows(filename: str, payload: bytes) -> list[dict]:
     return [row for row in rows if isinstance(row, dict)]
 
 
-def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator: AnswerGenerator, limit: int = 50) -> str:
+def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator: AnswerGenerator, limit: int = 200) -> str:
     retriever = SimpleBM25(docs)
     rows = benchmark_rows[:limit]
     if not rows:
@@ -265,16 +309,20 @@ def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator:
     citation = 0
     examples: list[str] = []
     for row in rows:
-        question = str(row.get("question") or row.get("query") or row.get("soru") or "").strip()
-        gold_answer = str(row.get("gold_answer") or row.get("answer") or row.get("cevap") or "").strip()
-        gold_source = str(
-            row.get("source_id")
-            or row.get("gold_document")
-            or row.get("gold_doc_id")
-            or row.get("relevant_document")
-            or row.get("relevant_doc")
-            or ""
-        ).strip()
+        question = first_text(row.get("question"), row.get("query"), row.get("soru"))
+        gold_answer = first_text(row.get("gold_answer"), row.get("answer"), row.get("answers"), row.get("cevap"))
+        gold_sources = (
+            as_list(row.get("source_id"))
+            or as_list(row.get("source_ids"))
+            or as_list(row.get("gold_document"))
+            or as_list(row.get("gold_documents"))
+            or as_list(row.get("gold_doc_id"))
+            or as_list(row.get("gold_doc_ids"))
+            or as_list(row.get("relevant_document"))
+            or as_list(row.get("relevant_documents"))
+            or as_list(row.get("relevant_doc"))
+            or as_list(row.get("relevant_docs"))
+        )
         if not question:
             continue
         results = retriever.search(question, top_k=5)
@@ -285,14 +333,14 @@ def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator:
         f1_sum += f1
         if gold_answer and normalize_text(answer) == normalize_text(gold_answer):
             exact += 1
-        if gold_source:
+        if gold_sources:
             joined_first = f"{result_ids[0]} {result_citations[0]}" if result_ids else ""
             joined_all = " ".join(result_ids + result_citations)
-            if result_ids and contains_normalized(joined_first, gold_source):
+            if result_ids and any(contains_normalized(joined_first, source) for source in gold_sources):
                 top1 += 1
-            if contains_normalized(joined_all, gold_source):
+            if any(contains_normalized(joined_all, source) for source in gold_sources):
                 top5 += 1
-            if contains_normalized(answer, gold_source):
+            if any(contains_normalized(answer, source) for source in gold_sources):
                 citation += 1
         total += 1
         if len(examples) < 3:
@@ -301,13 +349,27 @@ def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator:
             )
     if total == 0:
         raise ValueError("Benchmark icinde gecerli question/query alani bulunamadi.")
+    has_gold_answer = any(first_text(row.get("gold_answer"), row.get("answer"), row.get("answers"), row.get("cevap")) for row in rows)
+    has_gold_source = any(
+        as_list(row.get("source_id"))
+        or as_list(row.get("source_ids"))
+        or as_list(row.get("gold_document"))
+        or as_list(row.get("gold_documents"))
+        or as_list(row.get("gold_doc_id"))
+        or as_list(row.get("gold_doc_ids"))
+        or as_list(row.get("relevant_document"))
+        or as_list(row.get("relevant_documents"))
+        or as_list(row.get("relevant_doc"))
+        or as_list(row.get("relevant_docs"))
+        for row in rows
+    )
     lines = [
         f"Evaluated questions: {total}",
-        f"Exact Match: {exact / total:.3f}" if any(str(row.get("gold_answer") or row.get("answer") or "").strip() for row in rows) else "Exact Match: n/a",
-        f"Token F1: {f1_sum / total:.3f}" if any(str(row.get("gold_answer") or row.get("answer") or "").strip() for row in rows) else "Token F1: n/a",
-        f"Top-1 Source Hit: {top1 / total:.3f}" if any(str(row.get("source_id") or row.get("gold_document") or "").strip() for row in rows) else "Top-1 Source Hit: n/a",
-        f"Top-5 Source Hit: {top5 / total:.3f}" if any(str(row.get("source_id") or row.get("gold_document") or "").strip() for row in rows) else "Top-5 Source Hit: n/a",
-        f"Citation Accuracy: {citation / total:.3f}" if any(str(row.get("source_id") or row.get("gold_document") or "").strip() for row in rows) else "Citation Accuracy: n/a",
+        f"Exact Match: {exact / total:.3f}" if has_gold_answer else "Exact Match: n/a",
+        f"Token F1: {f1_sum / total:.3f}" if has_gold_answer else "Token F1: n/a",
+        f"Top-1 Source Hit: {top1 / total:.3f}" if has_gold_source else "Top-1 Source Hit: n/a",
+        f"Top-5 Source Hit: {top5 / total:.3f}" if has_gold_source else "Top-5 Source Hit: n/a",
+        f"Citation Accuracy: {citation / total:.3f}" if has_gold_source else "Citation Accuracy: n/a",
         "",
         "Sample outputs:",
         "\n\n".join(examples),
