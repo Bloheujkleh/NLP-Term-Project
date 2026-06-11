@@ -13,6 +13,33 @@ from scripts.demo_app import (
 )
 
 
+class LazyGenerator:
+    def __init__(self, answer_mode: str, generation_model: str | None, max_new_tokens: int) -> None:
+        self.answer_mode = answer_mode
+        self.generation_model = generation_model
+        self.max_new_tokens = max_new_tokens
+        self._generator = None
+
+    def _load(self):
+        if self._generator is not None:
+            return self._generator
+        try:
+            print(f"Loading answer generator: {self.answer_mode} ({self.generation_model})")
+            self._generator = build_generator(self.answer_mode, self.generation_model, self.max_new_tokens)
+        except Exception as exc:
+            print(
+                f"Could not load {self.answer_mode} model ({self.generation_model}); "
+                f"using extractive fallback: {exc}"
+            )
+            self.answer_mode = "extractive"
+            self.generation_model = None
+            self._generator = build_generator("extractive", None, self.max_new_tokens)
+        return self._generator
+
+    def generate(self, question, results):
+        return self._load().generate(question, results)
+
+
 def main() -> None:
     data_dir = Path(os.environ.get("DATA_DIR", "data"))
     limit_env = os.environ.get("DOC_LIMIT")
@@ -31,13 +58,7 @@ def main() -> None:
     corpus_file = resolve_corpus_file(data_dir)
     docs = load_docs(corpus_file, limit=limit)
     retriever = SimpleBM25(docs)
-    try:
-        generator = build_generator(answer_mode, generation_model, max_new_tokens)
-    except Exception as exc:
-        print(f"Could not load {answer_mode} model ({generation_model}); using extractive fallback: {exc}")
-        answer_mode = "extractive"
-        generation_model = None
-        generator = build_generator(answer_mode, generation_model, max_new_tokens)
+    generator = LazyGenerator(answer_mode, generation_model, max_new_tokens)
     server = ThreadingHTTPServer(
         (host, port),
         build_handler(retriever, generator, answer_mode, generation_model),
