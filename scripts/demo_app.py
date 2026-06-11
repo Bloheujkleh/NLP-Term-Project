@@ -461,7 +461,7 @@ class GuardedCausalGenerator(AnswerGenerator):
             "1. Yalnizca verilen KAYNAKLAR bolumundeki bilgilere dayan.\n"
             "2. Kaynakta olmayan bilgi, madde numarasi veya ceza uretme.\n"
             "3. Kaynaklar yeterli degilse 'Yuklenen kaynaklarda bu soruya yeterli cevap yok.' de.\n"
-            "4. Cevabi 2-4 cumlelik Turkce ve net yaz.\n"
+            "4. Cevabi en fazla 1-2 cumlelik Turkce ve net yaz. Ornek, genel yorum veya ek aciklama ekleme.\n"
             "5. En sonda mutlaka 'Kaynak: ...' satiri ekle ve en uygun kaynak etiketini kullan.\n\n"
             "Kaynakta soru ile ilgili ceza, sure, tutar, hak veya sart acikca yaziyorsa "
             "bu kritik bilgiyi cevaba aynen dahil et.\n\n"
@@ -513,6 +513,10 @@ class GuardedCausalGenerator(AnswerGenerator):
             text = text.split("CEVAP:", 1)[-1].strip()
         text = re.split(r"\n\s*KAYNAKLAR:|\n\s*SORU:", text, maxsplit=1)[0].strip()
         text = re.sub(r"\s+", " ", text).strip()
+        answer_part = text.split("Kaynak:", 1)[0].strip()
+        sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", answer_part) if part.strip()]
+        if sentences:
+            text = " ".join(sentences[:2])
         text = text.replace(" Kaynak:", "\n\nKaynak:")
         if "Kaynak:" not in text:
             text = f"{text}\n\nKaynak: {fallback_doc.citation}"

@@ -21,14 +21,14 @@ Question
 -> citation + retrieved sources
 ```
 
-The deployed app uses `Qwen/Qwen2.5-0.5B-Instruct` by default because it is a
-small instruction-tuned causal language model that fits the RAG pattern better
-than the earlier FLAN-T5 smoke-test path. For the final/highest-quality upload,
-run `colab_qwen_lora_finetune.ipynb`, push the merged fine-tuned Qwen model to
-Hugging Face, and set this Space environment variable:
+The deployed app uses the fine-tuned model
+`felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft` by default. This model was
+trained from `Qwen/Qwen2.5-0.5B-Instruct` with LoRA on the Turkish legal RAG
+source-grounded answer dataset. To override the generator model, set this Space
+environment variable:
 
 ```text
-GENERATION_MODEL=<your-hf-username>/turkish-legal-qwen2-5-0-5b-rag-sft
+GENERATION_MODEL=<model-id>
 ```
 
 The selected Qwen model receives the retrieved chunks in the prompt and is

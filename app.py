@@ -25,7 +25,10 @@ def main() -> None:
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "7860"))
     answer_mode = os.environ.get("ANSWER_MODE", "guarded_causal")
-    generation_model = os.environ.get("GENERATION_MODEL", "Qwen/Qwen2.5-0.5B-Instruct")
+    generation_model = os.environ.get(
+        "GENERATION_MODEL",
+        "felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft",
+    )
     max_new_tokens = int(os.environ.get("MAX_NEW_TOKENS", "180"))
     if answer_mode == "extractive":
         generation_model = None

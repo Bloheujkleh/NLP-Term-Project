@@ -22,12 +22,13 @@ Question
 -> citation / retrieved sources
 ```
 
-The default hosted mode uses `Qwen/Qwen2.5-0.5B-Instruct` as a lightweight
-instruction model. For the best final submission, train and push a legal RAG
-LoRA/merged model with `colab_qwen_lora_finetune.ipynb`, then set:
+The default hosted mode uses the fine-tuned model
+`felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft`. It was trained from
+`Qwen/Qwen2.5-0.5B-Instruct` with LoRA on the Turkish legal RAG source-grounded
+answer dataset. To override the model, set:
 
 ```text
-GENERATION_MODEL=<your-hf-username>/turkish-legal-qwen2-5-0-5b-rag-sft
+GENERATION_MODEL=<model-id>
 ```
 
 The selected model receives only the retrieved legal chunks as context and is
