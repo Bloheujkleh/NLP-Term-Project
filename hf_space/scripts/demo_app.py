@@ -113,10 +113,63 @@ def extract_uploaded_text(filename: str, payload: bytes) -> str:
         return extract_docx_text(payload)
     if suffix == ".pdf":
         return extract_pdf_text(payload)
-    raise ValueError("Desteklenen dosya tipleri: .txt, .md, .csv, .json, .jsonl, .docx, .pdf")
+    raise ValueError("Desteklenen dosya tipleri: .txt, .md, .csv, .json, .jsonl, .docx, .pdf, .zip")
+
+
+def docs_from_structured_rows(filename: str, payload: bytes) -> list[Doc]:
+    suffix = Path(filename).suffix.lower()
+    try:
+        if suffix == ".jsonl":
+            rows = [json.loads(line) for line in payload.decode("utf-8-sig", errors="ignore").splitlines() if line.strip()]
+        elif suffix == ".json":
+            loaded = json.loads(payload.decode("utf-8-sig", errors="ignore"))
+            rows = loaded if isinstance(loaded, list) else loaded.get("documents") or loaded.get("data") or [loaded]
+        else:
+            return []
+    except Exception:
+        return []
+    docs: list[Doc] = []
+    for idx, row in enumerate(rows, start=1):
+        if not isinstance(row, dict):
+            continue
+        text = str(row.get("text") or row.get("content") or row.get("passage") or row.get("document") or "").strip()
+        if not text:
+            continue
+        metadata = row.get("metadata") or {}
+        doc_id = str(row.get("id") or row.get("source_id") or metadata.get("chunk_id") or f"{Path(filename).stem}_{idx}")
+        title = str(row.get("title") or metadata.get("title") or metadata.get("category") or Path(filename).name)
+        citation = str(row.get("citation") or row.get("citation_label") or metadata.get("citation_label") or f"{title} - {doc_id}")
+        docs.append(Doc(doc_id, title, text, citation))
+    return docs
+
+
+def docs_from_uploaded_file(filename: str, payload: bytes) -> list[Doc]:
+    suffix = Path(filename).suffix.lower()
+    if suffix == ".zip":
+        docs: list[Doc] = []
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            for info in archive.infolist():
+                if info.is_dir() or info.file_size <= 0:
+                    continue
+                inner_name = Path(info.filename).name
+                if not inner_name or inner_name.startswith("."):
+                    continue
+                inner_suffix = Path(inner_name).suffix.lower()
+                if inner_suffix not in {".txt", ".md", ".csv", ".json", ".jsonl", ".docx", ".pdf"}:
+                    continue
+                inner_payload = archive.read(info)
+                docs.extend(docs_from_uploaded_file(inner_name, inner_payload))
+        return docs
+
+    structured_docs = docs_from_structured_rows(filename, payload)
+    if structured_docs:
+        return structured_docs
+    text = extract_uploaded_text(filename, payload)
+    return chunk_uploaded_text(text, filename)
 
 
 def chunk_uploaded_text(text: str, filename: str, chunk_size: int = 900, overlap: int = 150) -> list[Doc]:
+    text = text.replace("\ufeff", "")
     text = re.sub(r"\r\n?", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     if not text:
@@ -146,6 +199,114 @@ def chunk_uploaded_text(text: str, filename: str, chunk_size: int = 900, overlap
             next_start = start + chunk_size
         start = next_start
     return chunks
+
+
+def normalize_text(text: str) -> str:
+    return " ".join(tokenize(text))
+
+
+def token_f1(prediction: str, gold: str) -> float:
+    pred_tokens = tokenize(prediction)
+    gold_tokens = tokenize(gold)
+    if not pred_tokens and not gold_tokens:
+        return 1.0
+    if not pred_tokens or not gold_tokens:
+        return 0.0
+    pred_counts = Counter(pred_tokens)
+    gold_counts = Counter(gold_tokens)
+    overlap = sum((pred_counts & gold_counts).values())
+    if overlap == 0:
+        return 0.0
+    precision = overlap / len(pred_tokens)
+    recall = overlap / len(gold_tokens)
+    return 2 * precision * recall / (precision + recall)
+
+
+def parse_benchmark_rows(filename: str, payload: bytes) -> list[dict]:
+    suffix = Path(filename).suffix.lower()
+    if suffix == ".zip":
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            for info in archive.infolist():
+                if info.is_dir():
+                    continue
+                inner_suffix = Path(info.filename).suffix.lower()
+                if inner_suffix in {".json", ".jsonl"}:
+                    return parse_benchmark_rows(Path(info.filename).name, archive.read(info))
+        raise ValueError("Zip icinde benchmark .json veya .jsonl bulunamadi.")
+    raw = payload.decode("utf-8-sig", errors="ignore")
+    if suffix == ".jsonl":
+        rows = [json.loads(line) for line in raw.splitlines() if line.strip()]
+    elif suffix == ".json":
+        loaded = json.loads(raw)
+        rows = loaded if isinstance(loaded, list) else loaded.get("questions") or loaded.get("data") or loaded.get("benchmark")
+    else:
+        raise ValueError("Benchmark dosyasi .json, .jsonl veya .zip olmali.")
+    if not isinstance(rows, list):
+        raise ValueError("Benchmark list formatinda olmali.")
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator: AnswerGenerator, limit: int = 50) -> str:
+    retriever = SimpleBM25(docs)
+    rows = benchmark_rows[:limit]
+    if not rows:
+        raise ValueError("Benchmark icinde soru bulunamadi.")
+    total = 0
+    exact = 0
+    f1_sum = 0.0
+    top1 = 0
+    top5 = 0
+    citation = 0
+    examples: list[str] = []
+    for row in rows:
+        question = str(row.get("question") or row.get("query") or row.get("soru") or "").strip()
+        gold_answer = str(row.get("gold_answer") or row.get("answer") or row.get("cevap") or "").strip()
+        gold_source = str(
+            row.get("source_id")
+            or row.get("gold_document")
+            or row.get("gold_doc_id")
+            or row.get("relevant_document")
+            or row.get("relevant_doc")
+            or ""
+        ).strip()
+        if not question:
+            continue
+        results = retriever.search(question, top_k=5)
+        answer = generator.generate(question, results)
+        result_ids = [doc.id for doc, _score in results]
+        result_citations = [doc.citation for doc, _score in results]
+        f1 = token_f1(answer, gold_answer) if gold_answer else 0.0
+        f1_sum += f1
+        if gold_answer and normalize_text(answer) == normalize_text(gold_answer):
+            exact += 1
+        if gold_source:
+            joined_first = f"{result_ids[0]} {result_citations[0]}" if result_ids else ""
+            joined_all = " ".join(result_ids + result_citations)
+            if result_ids and gold_source in joined_first:
+                top1 += 1
+            if gold_source in joined_all:
+                top5 += 1
+            if gold_source in answer:
+                citation += 1
+        total += 1
+        if len(examples) < 3:
+            examples.append(
+                f"Q: {question}\nA: {answer[:500]}\nTop source: {result_citations[0] if result_citations else 'none'}"
+            )
+    if total == 0:
+        raise ValueError("Benchmark icinde gecerli question/query alani bulunamadi.")
+    lines = [
+        f"Evaluated questions: {total}",
+        f"Exact Match: {exact / total:.3f}" if any(str(row.get("gold_answer") or row.get("answer") or "").strip() for row in rows) else "Exact Match: n/a",
+        f"Token F1: {f1_sum / total:.3f}" if any(str(row.get("gold_answer") or row.get("answer") or "").strip() for row in rows) else "Token F1: n/a",
+        f"Top-1 Source Hit: {top1 / total:.3f}" if any(str(row.get("source_id") or row.get("gold_document") or "").strip() for row in rows) else "Top-1 Source Hit: n/a",
+        f"Top-5 Source Hit: {top5 / total:.3f}" if any(str(row.get("source_id") or row.get("gold_document") or "").strip() for row in rows) else "Top-5 Source Hit: n/a",
+        f"Citation Accuracy: {citation / total:.3f}" if any(str(row.get("source_id") or row.get("gold_document") or "").strip() for row in rows) else "Citation Accuracy: n/a",
+        "",
+        "Sample outputs:",
+        "\n\n".join(examples),
+    ]
+    return "\n".join(lines)
 
 
 class SimpleBM25:
@@ -196,11 +357,33 @@ class ExtractiveGenerator(AnswerGenerator):
             text = text[len(title) - 1 :].lstrip(" ?:-–—\t")
         return text or doc.text
 
+    @staticmethod
+    def select_relevant_excerpt(question: str, doc: Doc, max_sentences: int = 3) -> str:
+        text = ExtractiveGenerator.clean_excerpt(doc)
+        sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+|\n+", text) if part.strip()]
+        if len(sentences) <= 1:
+            return text[:1200]
+        query_terms = {tok for tok in tokenize(question) if len(tok) > 2}
+        scored: list[tuple[int, int, str]] = []
+        for idx, sentence in enumerate(sentences):
+            sent_tokens = set(tokenize(sentence))
+            overlap = len(query_terms & sent_tokens)
+            critical_bonus = sum(
+                1
+                for term in ["ceza", "hapis", "muebbet", "müebbet", "hak", "sure", "süre", "sart", "şart"]
+                if term in sent_tokens
+            )
+            scored.append((overlap + critical_bonus, -idx, sentence))
+        selected = sorted(scored, reverse=True)[:max_sentences]
+        selected_indices = sorted(-idx for _score, idx, _sentence in selected)
+        excerpt = " ".join(sentences[idx] for idx in selected_indices)
+        return excerpt[:1200] if excerpt else text[:1200]
+
     def generate(self, question: str, results: list[tuple[Doc, float]]) -> str:
         if not results:
             return "Bu soru icin kaynak bulunamadi."
         best = results[0][0]
-        excerpt = self.clean_excerpt(best)
+        excerpt = self.select_relevant_excerpt(question, best)
         return f"Kaynaga gore: {excerpt}\n\nKaynak: {best.citation}"
 
 
@@ -385,6 +568,7 @@ def page(
     upload_answer: str = "",
     upload_results: list[tuple[Doc, float]] | None = None,
     upload_message: str = "",
+    eval_report: str = "",
 ) -> bytes:
     results = results or []
     upload_results = upload_results or []
@@ -479,6 +663,17 @@ def page(
     </section>
     {f'<section class="panel"><h2>Uploaded Document Answer</h2><pre>{html.escape(upload_answer)}</pre></section>' if upload_answer else ''}
     {f'<section><h2>Uploaded document sources</h2>{upload_source_cards}</section>' if upload_results else ''}
+    <section class="panel">
+      <h2>Custom Benchmark Evaluation</h2>
+      <form method="post" action="/eval_upload" enctype="multipart/form-data">
+        <label for="eval_corpus"><strong>Upload corpus / document collection</strong></label>
+        <input id="eval_corpus" name="eval_corpus" type="file" accept=".zip,.txt,.md,.csv,.json,.jsonl,.docx,.pdf">
+        <label for="eval_benchmark"><strong>Upload benchmark</strong> (.json/.jsonl with question, gold_answer, source_id)</label>
+        <input id="eval_benchmark" name="eval_benchmark" type="file" accept=".json,.jsonl,.zip">
+        <div class="actions"><button type="submit">Run Custom Benchmark</button></div>
+      </form>
+      {f'<h3>Custom Benchmark Results</h3><pre>{html.escape(eval_report)}</pre>' if eval_report else ''}
+    </section>
   </main>
 </body>
 </html>"""
@@ -496,6 +691,9 @@ def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode
         def do_POST(self) -> None:
             if self.path == "/upload_ask":
                 self.handle_upload_ask()
+                return
+            if self.path == "/eval_upload":
+                self.handle_eval_upload()
                 return
             length = int(self.headers.get("Content-Length", "0"))
             payload = self.rfile.read(length).decode("utf-8")
@@ -529,11 +727,10 @@ def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode
                 if not upload_question:
                     raise ValueError("Lutfen yuklenen dokuman icin bir soru yazin.")
                 if file_item is None or not getattr(file_item, "filename", ""):
-                    raise ValueError("Lutfen .txt, .md, .docx veya .pdf dosyasi secin.")
+                    raise ValueError("Lutfen .txt, .md, .docx, .pdf, .jsonl veya .zip dosyasi secin.")
                 filename = Path(file_item.filename).name
                 payload = file_item.file.read()
-                text = extract_uploaded_text(filename, payload)
-                upload_docs = chunk_uploaded_text(text, filename)
+                upload_docs = docs_from_uploaded_file(filename, payload)
                 if not upload_docs:
                     raise ValueError("Yuklenen dosyadan okunabilir metin cikarilamadi.")
                 custom_retriever = SimpleBM25(upload_docs)
@@ -554,6 +751,48 @@ def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode
                     upload_answer=upload_answer,
                     upload_results=upload_results,
                     upload_message=upload_message,
+                )
+            )
+
+        def handle_eval_upload(self) -> None:
+            eval_report = ""
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                payload = self.rfile.read(content_length)
+                form = cgi.FieldStorage(
+                    fp=io.BytesIO(payload),
+                    headers=self.headers,
+                    environ={
+                        "REQUEST_METHOD": "POST",
+                        "CONTENT_TYPE": self.headers.get("Content-Type", ""),
+                        "CONTENT_LENGTH": str(len(payload)),
+                    },
+                )
+                corpus_item = form["eval_corpus"] if "eval_corpus" in form else None
+                benchmark_item = form["eval_benchmark"] if "eval_benchmark" in form else None
+                if corpus_item is None or not getattr(corpus_item, "filename", ""):
+                    raise ValueError("Lutfen corpus/document collection dosyasi yukleyin.")
+                if benchmark_item is None or not getattr(benchmark_item, "filename", ""):
+                    raise ValueError("Lutfen benchmark .json/.jsonl dosyasi yukleyin.")
+                corpus_name = Path(corpus_item.filename).name
+                benchmark_name = Path(benchmark_item.filename).name
+                docs = docs_from_uploaded_file(corpus_name, corpus_item.file.read())
+                if not docs:
+                    raise ValueError("Corpus dosyasindan okunabilir dokuman cikarilamadi.")
+                benchmark_rows = parse_benchmark_rows(benchmark_name, benchmark_item.file.read())
+                eval_report = run_custom_benchmark(docs, benchmark_rows, generator)
+                eval_report = f"Corpus documents/chunks: {len(docs)}\nBenchmark file: {benchmark_name}\n\n{eval_report}"
+            except Exception as exc:
+                eval_report = f"Evaluation error: {exc}"
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(
+                page(
+                    answer_mode=answer_mode,
+                    generation_model=generation_model,
+                    eval_report=eval_report,
                 )
             )
 

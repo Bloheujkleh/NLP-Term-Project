@@ -35,14 +35,17 @@ take longer while the model is downloaded.
 
 The lower panel of the demo supports instructor-provided documents:
 
-1. Upload a `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, or `.pdf` file.
+1. Upload a `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, `.pdf`, or `.zip` file.
+   A `.zip` file can contain a document collection with multiple supported files.
 2. Write a question about the uploaded document.
 3. Click **Ask Uploaded Document**.
 4. The system extracts text, chunks the uploaded file, builds a temporary BM25 index, and answers using only the uploaded document chunks.
 
-This is intended for interactive custom-data testing. Benchmark-style metric
-evaluation additionally requires a benchmark file with `question`, `gold_answer`,
-and `source_id`.
+The app also includes a **Custom Benchmark Evaluation** panel. The instructor can
+upload a custom corpus/document collection and a benchmark `.json`/`.jsonl` file
+with fields such as `question`, `gold_answer`, and `source_id`. The app reports
+Exact Match, Token F1, Top-1/Top-5 Source Hit, and Citation Accuracy for the
+uploaded benchmark.
 
 ## Included Data
 

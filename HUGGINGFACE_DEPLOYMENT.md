@@ -59,8 +59,10 @@ The lower panel of the web app supports instructor-provided files.
 Supported file types:
 
 ```text
-.txt, .md, .csv, .json, .jsonl, .docx, .pdf
+.txt, .md, .csv, .json, .jsonl, .docx, .pdf, .zip
 ```
+
+For document collections, upload a `.zip` containing multiple supported files.
 
 Flow:
 
@@ -76,6 +78,10 @@ Upload file
 This satisfies the interactive custom document testing requirement. If benchmark
 metrics are needed on instructor data, the instructor also needs to provide a
 benchmark file with `question`, `gold_answer`, and `source_id`.
+
+The web app also provides a **Custom Benchmark Evaluation** panel. It accepts a
+custom corpus/document collection plus a `.json`/`.jsonl` benchmark file and
+reports Exact Match, Token F1, Top-1/Top-5 Source Hit, and Citation Accuracy.
 
 ## Local Test
 
