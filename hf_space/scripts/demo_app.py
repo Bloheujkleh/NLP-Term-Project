@@ -699,20 +699,6 @@ def page(
 ) -> bytes:
     results = results or []
     upload_results = upload_results or []
-    sample_buttons = "".join(
-        f"<button name='question' value='{html.escape(q)}'>{html.escape(q)}</button>" for q in SAMPLE_QUESTIONS
-    )
-    source_cards = "".join(
-        f"""
-        <article class="source">
-          <div class="rank">#{rank} | score {score:.3f}</div>
-          <h3>{html.escape(doc.title)}</h3>
-          <p>{html.escape(doc.text[:900])}</p>
-          <code>{html.escape(doc.citation)}</code>
-        </article>
-        """
-        for rank, (doc, score) in enumerate(results, start=1)
-    )
     upload_source_cards = "".join(
         f"""
         <article class="source">
@@ -758,39 +744,20 @@ def page(
   </style>
 </head>
 <body>
-  <header>
-    <h1>Turkish Legal RAG Demo</h1>
-    <p>BM25 retrieval + source-grounded answer + citations</p>
+    <header>
+    <h1>Turkish Legal RAG Custom Data Test</h1>
+    <p>Upload documents, ask questions, or run a benchmark on your own collection.</p>
   </header>
   <main>
-    <section class="metrics">
-      <div class="metric"><strong>0.975</strong>Recall@10 BM25</div>
-      <div class="metric"><strong>0.799</strong>QA Token F1</div>
-      <div class="metric"><strong>0.908</strong>Top-5 source hit</div>
-      <div class="metric"><strong>0.813</strong>Citation accuracy</div>
-    </section>
-    <section class="panel"><strong>Default answer mode:</strong> {html.escape(answer_mode)}{model_line}</section>
     <section class="panel">
-      <form method="post" action="/ask">
-        <label for="question"><strong>Legal question</strong></label>
-        <textarea id="question" name="question">{html.escape(question)}</textarea>
-        <label for="runtime_mode"><strong>Answer engine</strong></label>
-        <select id="runtime_mode" name="runtime_mode">
-          <option value="extractive" {extractive_selected}>Fast source-grounded extractive</option>
-          <option value="guarded_causal" {llm_selected}>Fine-tuned Qwen LLM (slower, guarded fallback)</option>
-        </select>
-        <div class="actions"><button type="submit">Ask RAG</button></div>
-        <div class="samples">{sample_buttons}</div>
-      </form>
+      <strong>Default engine:</strong> Fast source-grounded extractive{model_line}
     </section>
-    {f'<section class="panel"><h2>Answer</h2><pre>{html.escape(answer)}</pre></section>' if answer else ''}
-    {f'<section><h2>Retrieved sources</h2>{source_cards}</section>' if results else ''}
     <section class="panel">
-      <h2>Custom Document Test</h2>
+      <h2>1. Upload Document Collection and Ask</h2>
       <form method="post" action="/upload_ask" enctype="multipart/form-data">
-        <label for="custom_file"><strong>Upload a document</strong></label>
+        <label for="custom_file"><strong>Upload file or ZIP collection</strong></label>
         <input id="custom_file" name="custom_file" type="file" accept=".zip,.txt,.md,.csv,.json,.jsonl,.docx,.pdf">
-        <label for="upload_question"><strong>Question for uploaded document</strong></label>
+        <label for="upload_question"><strong>Question</strong></label>
         <textarea id="upload_question" name="upload_question">{html.escape(upload_question)}</textarea>
         <label for="upload_runtime_mode"><strong>Answer engine</strong></label>
         <select id="upload_runtime_mode" name="runtime_mode">
@@ -801,18 +768,18 @@ def page(
       </form>
       {f'<p><strong>{html.escape(upload_message)}</strong></p>' if upload_message else ''}
     </section>
-    {f'<section class="panel"><h2>Uploaded Document Answer</h2><pre>{html.escape(upload_answer)}</pre></section>' if upload_answer else ''}
-    {f'<section><h2>Uploaded document sources</h2>{upload_source_cards}</section>' if upload_results else ''}
+    {f'<section class="panel"><h2>Answer</h2><pre>{html.escape(upload_answer)}</pre></section>' if upload_answer else ''}
+    {f'<section><h2>Retrieved Sources</h2>{upload_source_cards}</section>' if upload_results else ''}
     <section class="panel">
-      <h2>Custom Benchmark Evaluation</h2>
+      <h2>2. Upload Corpus and Benchmark</h2>
       <form method="post" action="/eval_upload" enctype="multipart/form-data">
-        <label for="eval_corpus"><strong>Upload corpus / document collection</strong></label>
+        <label for="eval_corpus"><strong>Corpus / document collection</strong></label>
         <input id="eval_corpus" name="eval_corpus" type="file" accept=".zip,.txt,.md,.csv,.json,.jsonl,.docx,.pdf">
-        <label for="eval_benchmark"><strong>Upload benchmark</strong> (.json/.jsonl with question, gold_answer, source_id)</label>
+        <label for="eval_benchmark"><strong>Benchmark</strong> (.json/.jsonl/.zip with question, answer/gold_answer, source_id/relevant_documents)</label>
         <input id="eval_benchmark" name="eval_benchmark" type="file" accept=".json,.jsonl,.zip">
-        <div class="actions"><button type="submit">Run Custom Benchmark</button></div>
+        <div class="actions"><button type="submit">Run Benchmark</button></div>
       </form>
-      {f'<h3>Custom Benchmark Results</h3><pre>{html.escape(eval_report)}</pre>' if eval_report else ''}
+      {f'<h3>Benchmark Results</h3><pre>{html.escape(eval_report)}</pre>' if eval_report else ''}
     </section>
   </main>
 </body>

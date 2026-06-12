@@ -48,7 +48,7 @@ The app does not require paid APIs and the default mode runs quickly on CPU.
 
 ## Instructor Custom Document Test
 
-The lower panel of the demo supports instructor-provided documents:
+The first screen is focused on instructor-provided data:
 
 1. Upload a `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, `.pdf`, or `.zip` file.
    A `.zip` file can contain a document collection with multiple supported files.
@@ -56,7 +56,7 @@ The lower panel of the demo supports instructor-provided documents:
 3. Click **Ask Uploaded Document**.
 4. The system extracts text, chunks the uploaded file, builds a temporary BM25 index, and answers using only the uploaded document chunks.
 
-The app also includes a **Custom Benchmark Evaluation** panel. The instructor can
+The app also includes a **Upload Corpus and Benchmark** panel. The instructor can
 upload a custom corpus/document collection and a benchmark `.json`/`.jsonl` file
 with fields such as `question`, `gold_answer`, and `source_id`. Common aliases
 such as `query`, `answer`, `answers`, `relevant_documents`, `doc_id`, and

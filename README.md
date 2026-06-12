@@ -12,11 +12,11 @@ hf_space/
 ```
 
 Create a Hugging Face Space with **Docker** SDK and upload the contents of
-`hf_space/` as the Space root. This hosted version runs the reliable default
-pipeline:
+`hf_space/` as the Space root. This hosted version opens directly to the
+instructor custom-data test screen and runs the reliable default pipeline:
 
 ```text
-BM25 retrieval -> extractive source-grounded answer -> citation
+upload document collection -> BM25 retrieval -> extractive source-grounded answer -> citation
 ```
 
 It includes a `Custom Document Test` panel so the instructor can upload their
