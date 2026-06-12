@@ -24,12 +24,13 @@ class LazyGenerator:
         if self._generator is not None:
             return self._generator
         try:
-            print(f"Loading answer generator: {self.answer_mode} ({self.generation_model})")
+            print(f"Loading answer generator: {self.answer_mode} ({self.generation_model})", flush=True)
             self._generator = build_generator(self.answer_mode, self.generation_model, self.max_new_tokens)
         except Exception as exc:
             print(
                 f"Could not load {self.answer_mode} model ({self.generation_model}); "
-                f"using extractive fallback: {exc}"
+                f"using extractive fallback: {exc}",
+                flush=True,
             )
             self.answer_mode = "extractive"
             self.generation_model = None
@@ -38,6 +39,12 @@ class LazyGenerator:
 
     def generate(self, question, results):
         return self._load().generate(question, results)
+
+    def status(self) -> str:
+        generator = self._generator
+        generator_class = generator.__class__.__name__ if generator is not None else "not_loaded"
+        model = self.generation_model or "none"
+        return f"actual_mode={self.answer_mode}; class={generator_class}; model={model}"
 
 
 def main() -> None:
@@ -68,10 +75,10 @@ def main() -> None:
             llm_generator=llm_generator,
         ),
     )
-    print(f"Loaded {len(docs)} documents from {corpus_file}")
-    print(f"Answer mode: {answer_mode}")
-    print(f"Optional LLM model: {generation_model}")
-    print(f"Demo running at http://{host}:{port}")
+    print(f"Loaded {len(docs)} documents from {corpus_file}", flush=True)
+    print(f"Answer mode: {answer_mode}", flush=True)
+    print(f"Optional LLM model: {generation_model}", flush=True)
+    print(f"Demo running at http://{host}:{port}", flush=True)
     server.serve_forever()
 
 

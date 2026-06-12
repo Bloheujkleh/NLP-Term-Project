@@ -432,8 +432,13 @@ def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator:
         or as_list(row.get("relevant_docs"))
         for row in rows
     )
+    generator_status = ""
+    status_fn = getattr(generator, "status", None)
+    if callable(status_fn):
+        generator_status = str(status_fn())
     lines = [
         f"Evaluated questions: {total}",
+        f"Generator status: {generator_status}" if generator_status else "",
         f"Exact Match: {exact / total:.3f}" if has_gold_answer else "Exact Match: n/a",
         f"Answer Contains Gold: {contains_gold / total:.3f}" if has_gold_answer else "Answer Contains Gold: n/a",
         f"Token F1: {f1_sum / total:.3f}" if has_gold_answer else "Token F1: n/a",
@@ -444,7 +449,7 @@ def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator:
         "Sample outputs:",
         "\n\n".join(examples),
     ]
-    return "\n".join(lines)
+    return "\n".join(line for line in lines if line)
 
 
 def source_payload(results: list[tuple[Doc, float]]) -> list[dict]:
