@@ -596,12 +596,13 @@ class LocalHFGenerator(AnswerGenerator):
 
 
 class GuardedCausalGenerator(AnswerGenerator):
-    def __init__(self, model_name: str, max_new_tokens: int = 180) -> None:
+    def __init__(self, model_name: str, max_new_tokens: int = 180, fallback_on_unsupported: bool = True) -> None:
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.model_name = model_name
         self.max_new_tokens = max_new_tokens
+        self.fallback_on_unsupported = fallback_on_unsupported
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -714,6 +715,8 @@ class GuardedCausalGenerator(AnswerGenerator):
             answer = self.clean_generated_text(answer, results[0][0])
             if self.is_supported(answer, results):
                 return answer
+            if not self.fallback_on_unsupported:
+                return answer
         except Exception as exc:
             print(f"Guarded causal generation failed, using extractive fallback: {exc}")
         return self.fallback.generate(question, results)
@@ -728,6 +731,12 @@ def build_generator(answer_mode: str, generation_model: str | None, max_new_toke
         return LocalHFGenerator(generation_model, max_new_tokens=max_new_tokens)
     if answer_mode == "guarded_causal":
         return GuardedCausalGenerator(generation_model, max_new_tokens=max_new_tokens)
+    if answer_mode == "qwen_llm":
+        return GuardedCausalGenerator(
+            generation_model,
+            max_new_tokens=max_new_tokens,
+            fallback_on_unsupported=False,
+        )
     raise ValueError(f"Unknown answer mode: {answer_mode}")
 
 
@@ -737,7 +746,7 @@ def page(
     results: list[tuple[Doc, float]] | None = None,
     answer_mode: str = "extractive",
     generation_model: str | None = None,
-    selected_runtime_mode: str = "guarded_causal",
+    selected_runtime_mode: str = "qwen_llm",
     upload_question: str = "",
     upload_answer: str = "",
     upload_results: list[tuple[Doc, float]] | None = None,
@@ -759,8 +768,8 @@ def page(
         for rank, (doc, score) in enumerate(upload_results, start=1)
     )
     model_line = f" | <strong>Optional LLM:</strong> {html.escape(generation_model)}" if generation_model else ""
-    extractive_selected = "selected" if selected_runtime_mode != "guarded_causal" else ""
-    llm_selected = "selected" if selected_runtime_mode == "guarded_causal" else ""
+    extractive_selected = "selected" if selected_runtime_mode != "qwen_llm" else ""
+    llm_selected = "selected" if selected_runtime_mode == "qwen_llm" else ""
     body = f"""<!doctype html>
 <html lang="tr">
 <head>
@@ -798,8 +807,8 @@ def page(
   </header>
   <main>
     <section class="panel">
-      <strong>Default engine:</strong> Fine-tuned Qwen LLM with source-grounded fallback{model_line}
-      <p class="muted">For large custom datasets, the Qwen engine can take longer. If the Space times out or the benchmark is very large, choose the fast extractive engine below; it uses the same retrieved sources and citations without free-form generation.</p>
+      <strong>Default engine:</strong> Fine-tuned Qwen LLM{model_line}
+      <p class="muted">The default engine waits for the fine-tuned Qwen model output. For very large custom datasets, this can take longer; if the Space times out or the benchmark is very large, choose the fast extractive engine below.</p>
     </section>
     <section class="panel">
       <h2>Upload Dataset and Get Results</h2>
@@ -808,7 +817,7 @@ def page(
         <input id="dataset_file" name="dataset_file" type="file" accept=".zip,.json,.jsonl,.txt,.md,.csv,.docx,.pdf">
         <label for="dataset_runtime_mode"><strong>Answer engine</strong></label>
         <select id="dataset_runtime_mode" name="runtime_mode">
-          <option value="guarded_causal" {llm_selected}>Fine-tuned Qwen LLM (default, slower)</option>
+          <option value="qwen_llm" {llm_selected}>Fine-tuned Qwen LLM (default, slower)</option>
           <option value="extractive" {extractive_selected}>Fast source-grounded extractive</option>
         </select>
         <div class="actions"><button type="submit">Run Dataset</button></div>
@@ -825,7 +834,7 @@ def page(
         <label for="upload_runtime_mode"><strong>Answer engine</strong></label>
         <select id="upload_runtime_mode" name="runtime_mode">
           <option value="extractive" {extractive_selected}>Fast source-grounded extractive</option>
-          <option value="guarded_causal" {llm_selected}>Fine-tuned Qwen LLM (slower, guarded fallback)</option>
+          <option value="qwen_llm" {llm_selected}>Fine-tuned Qwen LLM (slower)</option>
         </select>
         <div class="actions"><button type="submit">Ask Uploaded Document</button></div>
       </form>
@@ -842,7 +851,7 @@ def page(
         <input id="eval_benchmark" name="eval_benchmark" type="file" accept=".json,.jsonl,.zip">
         <label for="eval_runtime_mode"><strong>Answer engine</strong></label>
         <select id="eval_runtime_mode" name="runtime_mode">
-          <option value="guarded_causal" {llm_selected}>Fine-tuned Qwen LLM (default, slower)</option>
+          <option value="qwen_llm" {llm_selected}>Fine-tuned Qwen LLM (default, slower)</option>
           <option value="extractive" {extractive_selected}>Fast source-grounded extractive</option>
         </select>
         <div class="actions"><button type="submit">Run Benchmark</button></div>
@@ -865,8 +874,8 @@ def build_handler(
     class DemoHandler(BaseHTTPRequestHandler):
         @staticmethod
         def choose_generator(runtime_mode: str) -> tuple[str, AnswerGenerator]:
-            if runtime_mode == "guarded_causal" and llm_generator is not None:
-                return "guarded_causal", llm_generator
+            if runtime_mode in {"qwen_llm", "guarded_causal"} and llm_generator is not None:
+                return runtime_mode, llm_generator
             return "extractive", generator
 
         def write_json(self, payload: dict, status: int = 200) -> None:
@@ -909,7 +918,7 @@ def build_handler(
             payload = self.rfile.read(length).decode("utf-8")
             parsed = parse_qs(payload)
             question = parsed.get("question", [""])[0].strip()
-            runtime_mode = parsed.get("runtime_mode", ["guarded_causal"])[0].strip()
+            runtime_mode = parsed.get("runtime_mode", ["qwen_llm"])[0].strip()
             selected_mode, active_generator = self.choose_generator(runtime_mode)
             results = retriever.search(question, top_k=5) if question else []
             answer = active_generator.generate(question, results) if question else ""
@@ -937,7 +946,7 @@ def build_handler(
                     parsed = parse_qs(raw)
                     data = {key: values[0] for key, values in parsed.items()}
                 question = str(data.get("question") or data.get("query") or "").strip()
-                runtime_mode = str(data.get("runtime_mode") or data.get("answer_engine") or "guarded_causal").strip()
+                runtime_mode = str(data.get("runtime_mode") or data.get("answer_engine") or "qwen_llm").strip()
                 if not question:
                     raise ValueError("question is required")
                 selected_mode, active_generator = self.choose_generator(runtime_mode)
@@ -971,7 +980,7 @@ def build_handler(
             try:
                 form = self.parse_multipart()
                 upload_question = str(form.getfirst("upload_question", form.getfirst("question", ""))).strip()
-                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "guarded_causal"))).strip()
+                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "qwen_llm"))).strip()
                 file_item = form["custom_file"] if "custom_file" in form else form["file"] if "file" in form else None
                 if not upload_question:
                     raise ValueError("question/upload_question is required")
@@ -1001,7 +1010,7 @@ def build_handler(
         def handle_api_eval_upload(self) -> None:
             try:
                 form = self.parse_multipart()
-                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "guarded_causal"))).strip()
+                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "qwen_llm"))).strip()
                 corpus_item = form["eval_corpus"] if "eval_corpus" in form else form["corpus"] if "corpus" in form else None
                 benchmark_item = (
                     form["eval_benchmark"]
@@ -1037,7 +1046,7 @@ def build_handler(
         def handle_api_dataset_eval(self) -> None:
             try:
                 form = self.parse_multipart()
-                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "guarded_causal"))).strip()
+                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "qwen_llm"))).strip()
                 dataset_item = form["dataset_file"] if "dataset_file" in form else form["dataset"] if "dataset" in form else form["file"] if "file" in form else None
                 if dataset_item is None or not getattr(dataset_item, "filename", ""):
                     raise ValueError("dataset_file/dataset/file is required")
@@ -1063,10 +1072,10 @@ def build_handler(
 
         def handle_dataset_eval(self) -> None:
             dataset_report = ""
-            selected_mode = "guarded_causal"
+            selected_mode = "qwen_llm"
             try:
                 form = self.parse_multipart()
-                runtime_mode = str(form.getfirst("runtime_mode", "guarded_causal")).strip()
+                runtime_mode = str(form.getfirst("runtime_mode", "qwen_llm")).strip()
                 selected_mode, active_generator = self.choose_generator(runtime_mode)
                 dataset_item = form["dataset_file"] if "dataset_file" in form else None
                 if dataset_item is None or not getattr(dataset_item, "filename", ""):
@@ -1117,7 +1126,7 @@ def build_handler(
                     },
                 )
                 upload_question = str(form.getfirst("upload_question", "")).strip()
-                runtime_mode = str(form.getfirst("runtime_mode", "guarded_causal")).strip()
+                runtime_mode = str(form.getfirst("runtime_mode", "qwen_llm")).strip()
                 selected_mode, active_generator = self.choose_generator(runtime_mode)
                 file_item = form["custom_file"] if "custom_file" in form else None
                 if not upload_question:
@@ -1154,7 +1163,7 @@ def build_handler(
 
         def handle_eval_upload(self) -> None:
             eval_report = ""
-            selected_mode = "guarded_causal"
+            selected_mode = "qwen_llm"
             try:
                 content_length = int(self.headers.get("Content-Length", "0"))
                 payload = self.rfile.read(content_length)
@@ -1167,7 +1176,7 @@ def build_handler(
                         "CONTENT_LENGTH": str(len(payload)),
                     },
                 )
-                runtime_mode = str(form.getfirst("runtime_mode", "guarded_causal")).strip()
+                runtime_mode = str(form.getfirst("runtime_mode", "qwen_llm")).strip()
                 selected_mode, active_generator = self.choose_generator(runtime_mode)
                 corpus_item = form["eval_corpus"] if "eval_corpus" in form else None
                 benchmark_item = form["eval_benchmark"] if "eval_benchmark" in form else None
@@ -1211,7 +1220,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=7860)
-    parser.add_argument("--answer-mode", choices=["extractive", "local_hf", "guarded_causal"], default="extractive")
+    parser.add_argument("--answer-mode", choices=["extractive", "local_hf", "guarded_causal", "qwen_llm"], default="extractive")
     parser.add_argument("--generation-model", default=None)
     parser.add_argument("--max-new-tokens", type=int, default=128)
     parser.add_argument("--no-browser", action="store_true")

@@ -17,18 +17,17 @@ This Space runs the deployment version of the Turkish Legal RAG project.
 ```text
 Question
 -> BM25 retrieval over Turkish legal corpus
--> guarded fine-tuned Qwen answer by default, with source-grounded extractive fallback
+-> fine-tuned Qwen answer by default, with manual source-grounded extractive fallback option
 -> citation / retrieved sources
 ```
 
-The default hosted mode is `ANSWER_MODE=guarded_causal`, which uses the
-fine-tuned Qwen LLM first and falls back to the extractive source-grounded answer
-when the generated answer is too short, missing citation, or weakly supported.
+The default hosted mode is `ANSWER_MODE=qwen_llm`, which waits for the
+fine-tuned Qwen LLM output.
 The faster extractive engine remains available from the web UI through the
 **Answer engine** selector.
 
 ```text
-ANSWER_MODE=guarded_causal
+ANSWER_MODE=qwen_llm
 GENERATION_MODEL=felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft
 ```
 
@@ -39,10 +38,9 @@ legal RAG source-grounded answer dataset. To override the model, set:
 GENERATION_MODEL=<model-id>
 ```
 
-In guarded LLM mode, the selected model receives only the retrieved legal chunks as context and is
-prompted not to use outside knowledge. If the generated answer is too short,
-missing a citation, or weakly supported by the retrieved chunks, the app falls
-back to the extractive source-grounded answer.
+In Qwen LLM mode, the selected model receives only the retrieved legal chunks as
+context and is prompted not to use outside knowledge. The web UI also provides a
+fast extractive engine for large custom datasets or timeout-sensitive runs.
 
 The app does not require paid APIs and the default mode runs quickly on CPU.
 

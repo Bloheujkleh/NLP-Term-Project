@@ -46,7 +46,7 @@ def main() -> None:
     limit = int(limit_env) if limit_env else None
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "7860"))
-    answer_mode = os.environ.get("ANSWER_MODE", "guarded_causal")
+    answer_mode = os.environ.get("ANSWER_MODE", "qwen_llm")
     generation_model = os.environ.get(
         "GENERATION_MODEL",
         "felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft",
@@ -57,7 +57,7 @@ def main() -> None:
     docs = load_docs(corpus_file, limit=limit)
     retriever = SimpleBM25(docs)
     generator = LazyGenerator("extractive", None, max_new_tokens)
-    llm_generator = LazyGenerator("guarded_causal", generation_model, max_new_tokens)
+    llm_generator = LazyGenerator(answer_mode, generation_model, max_new_tokens)
     server = ThreadingHTTPServer(
         (host, port),
         build_handler(
@@ -70,7 +70,7 @@ def main() -> None:
     )
     print(f"Loaded {len(docs)} documents from {corpus_file}")
     print(f"Answer mode: {answer_mode}")
-    print(f"Optional guarded LLM model: {generation_model}")
+    print(f"Optional LLM model: {generation_model}")
     print(f"Demo running at http://{host}:{port}")
     server.serve_forever()
 
