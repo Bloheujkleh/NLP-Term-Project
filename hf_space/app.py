@@ -52,21 +52,25 @@ def main() -> None:
         "felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft",
     )
     max_new_tokens = int(os.environ.get("MAX_NEW_TOKENS", "80"))
-    if answer_mode == "extractive":
-        generation_model = None
 
     corpus_file = resolve_corpus_file(data_dir)
     docs = load_docs(corpus_file, limit=limit)
     retriever = SimpleBM25(docs)
-    generator = LazyGenerator(answer_mode, generation_model, max_new_tokens)
+    generator = LazyGenerator("extractive", None, max_new_tokens)
+    llm_generator = LazyGenerator("guarded_causal", generation_model, max_new_tokens)
     server = ThreadingHTTPServer(
         (host, port),
-        build_handler(retriever, generator, answer_mode, generation_model),
+        build_handler(
+            retriever,
+            generator,
+            answer_mode,
+            generation_model,
+            llm_generator=llm_generator,
+        ),
     )
     print(f"Loaded {len(docs)} documents from {corpus_file}")
     print(f"Answer mode: {answer_mode}")
-    if generation_model:
-        print(f"Generation model: {generation_model}")
+    print(f"Optional guarded LLM model: {generation_model}")
     print(f"Demo running at http://{host}:{port}")
     server.serve_forever()
 

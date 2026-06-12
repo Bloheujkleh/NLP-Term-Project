@@ -676,6 +676,7 @@ def page(
     results: list[tuple[Doc, float]] | None = None,
     answer_mode: str = "extractive",
     generation_model: str | None = None,
+    selected_runtime_mode: str = "extractive",
     upload_question: str = "",
     upload_answer: str = "",
     upload_results: list[tuple[Doc, float]] | None = None,
@@ -709,7 +710,9 @@ def page(
         """
         for rank, (doc, score) in enumerate(upload_results, start=1)
     )
-    model_line = f" | <strong>Model:</strong> {html.escape(generation_model)}" if generation_model else ""
+    model_line = f" | <strong>Optional LLM:</strong> {html.escape(generation_model)}" if generation_model else ""
+    extractive_selected = "selected" if selected_runtime_mode != "guarded_causal" else ""
+    llm_selected = "selected" if selected_runtime_mode == "guarded_causal" else ""
     body = f"""<!doctype html>
 <html lang="tr">
 <head>
@@ -725,7 +728,8 @@ def page(
     .metrics {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }}
     .metric, .panel, .source {{ background: white; border: 1px solid #d6dee9; border-radius: 8px; padding: 16px; }}
     .metric strong {{ display: block; color: #2e74b5; font-size: 24px; }}
-    textarea {{ width: 100%; min-height: 88px; font-size: 17px; padding: 12px; box-sizing: border-box; }}
+    textarea, select {{ width: 100%; font-size: 17px; padding: 12px; box-sizing: border-box; }}
+    textarea {{ min-height: 88px; }}
     .actions {{ display: flex; gap: 10px; align-items: center; margin-top: 10px; }}
     button {{ border: 1px solid #2e74b5; background: #2e74b5; color: white; padding: 10px 14px; border-radius: 6px; cursor: pointer; }}
     .samples button {{ margin: 6px 6px 0 0; background: white; color: #2e74b5; }}
@@ -751,11 +755,16 @@ def page(
       <div class="metric"><strong>0.908</strong>Top-5 source hit</div>
       <div class="metric"><strong>0.813</strong>Citation accuracy</div>
     </section>
-    <section class="panel"><strong>Answer mode:</strong> {html.escape(answer_mode)}{model_line}</section>
+    <section class="panel"><strong>Default answer mode:</strong> {html.escape(answer_mode)}{model_line}</section>
     <section class="panel">
       <form method="post" action="/ask">
         <label for="question"><strong>Legal question</strong></label>
         <textarea id="question" name="question">{html.escape(question)}</textarea>
+        <label for="runtime_mode"><strong>Answer engine</strong></label>
+        <select id="runtime_mode" name="runtime_mode">
+          <option value="extractive" {extractive_selected}>Fast source-grounded extractive</option>
+          <option value="guarded_causal" {llm_selected}>Fine-tuned Qwen LLM (slower, guarded fallback)</option>
+        </select>
         <div class="actions"><button type="submit">Ask RAG</button></div>
         <div class="samples">{sample_buttons}</div>
       </form>
@@ -769,6 +778,11 @@ def page(
         <input id="custom_file" name="custom_file" type="file" accept=".zip,.txt,.md,.csv,.json,.jsonl,.docx,.pdf">
         <label for="upload_question"><strong>Question for uploaded document</strong></label>
         <textarea id="upload_question" name="upload_question">{html.escape(upload_question)}</textarea>
+        <label for="upload_runtime_mode"><strong>Answer engine</strong></label>
+        <select id="upload_runtime_mode" name="runtime_mode">
+          <option value="extractive" {extractive_selected}>Fast source-grounded extractive</option>
+          <option value="guarded_causal" {llm_selected}>Fine-tuned Qwen LLM (slower, guarded fallback)</option>
+        </select>
         <div class="actions"><button type="submit">Ask Uploaded Document</button></div>
       </form>
       {f'<p><strong>{html.escape(upload_message)}</strong></p>' if upload_message else ''}
@@ -792,8 +806,20 @@ def page(
     return body.encode("utf-8")
 
 
-def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode: str, generation_model: str | None):
+def build_handler(
+    retriever: SimpleBM25,
+    generator: AnswerGenerator,
+    answer_mode: str,
+    generation_model: str | None,
+    llm_generator: AnswerGenerator | None = None,
+):
     class DemoHandler(BaseHTTPRequestHandler):
+        @staticmethod
+        def choose_generator(runtime_mode: str) -> tuple[str, AnswerGenerator]:
+            if runtime_mode == "guarded_causal" and llm_generator is not None:
+                return "guarded_causal", llm_generator
+            return "extractive", generator
+
         def do_GET(self) -> None:
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -809,19 +835,32 @@ def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode
                 return
             length = int(self.headers.get("Content-Length", "0"))
             payload = self.rfile.read(length).decode("utf-8")
-            question = parse_qs(payload).get("question", [""])[0].strip()
+            parsed = parse_qs(payload)
+            question = parsed.get("question", [""])[0].strip()
+            runtime_mode = parsed.get("runtime_mode", ["extractive"])[0].strip()
+            selected_mode, active_generator = self.choose_generator(runtime_mode)
             results = retriever.search(question, top_k=5) if question else []
-            answer = generator.generate(question, results) if question else ""
+            answer = active_generator.generate(question, results) if question else ""
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(page(question, answer, results, answer_mode=answer_mode, generation_model=generation_model))
+            self.wfile.write(
+                page(
+                    question,
+                    answer,
+                    results,
+                    answer_mode=answer_mode,
+                    generation_model=generation_model,
+                    selected_runtime_mode=selected_mode,
+                )
+            )
 
         def handle_upload_ask(self) -> None:
             upload_question = ""
             upload_answer = ""
             upload_results: list[tuple[Doc, float]] = []
             upload_message = ""
+            selected_mode = "extractive"
             try:
                 content_length = int(self.headers.get("Content-Length", "0"))
                 payload = self.rfile.read(content_length)
@@ -835,6 +874,8 @@ def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode
                     },
                 )
                 upload_question = str(form.getfirst("upload_question", "")).strip()
+                runtime_mode = str(form.getfirst("runtime_mode", "extractive")).strip()
+                selected_mode, active_generator = self.choose_generator(runtime_mode)
                 file_item = form["custom_file"] if "custom_file" in form else None
                 if not upload_question:
                     raise ValueError("Lutfen yuklenen dokuman icin bir soru yazin.")
@@ -847,10 +888,11 @@ def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode
                     raise ValueError("Yuklenen dosyadan okunabilir metin cikarilamadi.")
                 custom_retriever = SimpleBM25(upload_docs)
                 upload_results = custom_retriever.search(upload_question, top_k=5)
-                upload_answer = generator.generate(upload_question, upload_results)
+                upload_answer = active_generator.generate(upload_question, upload_results)
                 upload_message = f"{filename} indexed with {len(upload_docs)} chunks."
             except Exception as exc:
                 upload_message = f"Upload error: {exc}"
+                selected_mode = "extractive"
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -859,6 +901,7 @@ def build_handler(retriever: SimpleBM25, generator: AnswerGenerator, answer_mode
                 page(
                     answer_mode=answer_mode,
                     generation_model=generation_model,
+                    selected_runtime_mode=selected_mode,
                     upload_question=upload_question,
                     upload_answer=upload_answer,
                     upload_results=upload_results,

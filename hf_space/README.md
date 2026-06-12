@@ -23,7 +23,9 @@ Question
 
 The default hosted mode is `ANSWER_MODE=extractive` because it is fast on CPU,
 auditable, and robust for instructor-provided custom documents. The fine-tuned
-LLM is still available as an optional guarded generation mode:
+LLM is still available from the web UI through the **Answer engine** selector
+as `Fine-tuned Qwen LLM (slower, guarded fallback)`. It can also be enabled as
+the default guarded generation mode with:
 
 ```text
 ANSWER_MODE=guarded_causal
