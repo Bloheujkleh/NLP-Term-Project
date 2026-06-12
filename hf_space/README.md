@@ -64,6 +64,38 @@ such as `query`, `answer`, `answers`, `relevant_documents`, `doc_id`, and
 Gold, Token F1, Top-1/Top-5 Source Hit, and Citation Accuracy for the uploaded
 benchmark.
 
+## Programmatic API
+
+The same Space can be tested without using the web UI.
+
+Ask over the included corpus:
+
+```bash
+curl -X POST "$SPACE_URL/api/ask" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Kasten oldurme sucu nedir?","answer_engine":"extractive"}'
+```
+
+Ask over one uploaded document or a `.zip` document collection:
+
+```bash
+curl -X POST "$SPACE_URL/api/upload_ask" \
+  -F "file=@custom_docs.zip" \
+  -F "question=Kasten oldurme sucu cezasi nedir?" \
+  -F "answer_engine=extractive"
+```
+
+Run a custom benchmark:
+
+```bash
+curl -X POST "$SPACE_URL/api/eval_upload" \
+  -F "corpus=@custom_docs.zip" \
+  -F "benchmark=@benchmark.json"
+```
+
+The API returns JSON with the answer, selected answer engine, retrieved sources,
+and benchmark report.
+
 ## Included Data
 
 - `data/real_corpus.jsonl`: local Turkish legal corpus used by the default demo.

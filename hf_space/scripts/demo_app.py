@@ -404,6 +404,20 @@ def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator:
     return "\n".join(lines)
 
 
+def source_payload(results: list[tuple[Doc, float]]) -> list[dict]:
+    return [
+        {
+            "rank": rank,
+            "score": score,
+            "id": doc.id,
+            "title": doc.title,
+            "text": doc.text,
+            "citation": doc.citation,
+        }
+        for rank, (doc, score) in enumerate(results, start=1)
+    ]
+
+
 class SimpleBM25:
     def __init__(self, docs: list[Doc]) -> None:
         self.docs = docs
@@ -820,6 +834,14 @@ def build_handler(
                 return "guarded_causal", llm_generator
             return "extractive", generator
 
+        def write_json(self, payload: dict, status: int = 200) -> None:
+            body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_GET(self) -> None:
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -827,6 +849,15 @@ def build_handler(
             self.wfile.write(page(answer_mode=answer_mode, generation_model=generation_model))
 
         def do_POST(self) -> None:
+            if self.path == "/api/ask":
+                self.handle_api_ask()
+                return
+            if self.path == "/api/upload_ask":
+                self.handle_api_upload_ask()
+                return
+            if self.path == "/api/eval_upload":
+                self.handle_api_eval_upload()
+                return
             if self.path == "/upload_ask":
                 self.handle_upload_ask()
                 return
@@ -854,6 +885,110 @@ def build_handler(
                     selected_runtime_mode=selected_mode,
                 )
             )
+
+        def handle_api_ask(self) -> None:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length).decode("utf-8")
+                if "application/json" in self.headers.get("Content-Type", ""):
+                    data = json.loads(raw or "{}")
+                else:
+                    parsed = parse_qs(raw)
+                    data = {key: values[0] for key, values in parsed.items()}
+                question = str(data.get("question") or data.get("query") or "").strip()
+                runtime_mode = str(data.get("runtime_mode") or data.get("answer_engine") or "extractive").strip()
+                if not question:
+                    raise ValueError("question is required")
+                selected_mode, active_generator = self.choose_generator(runtime_mode)
+                results = retriever.search(question, top_k=5)
+                answer = active_generator.generate(question, results)
+                self.write_json(
+                    {
+                        "question": question,
+                        "answer": answer,
+                        "answer_engine": selected_mode,
+                        "sources": source_payload(results),
+                    }
+                )
+            except Exception as exc:
+                self.write_json({"error": str(exc)}, status=400)
+
+        def parse_multipart(self):
+            content_length = int(self.headers.get("Content-Length", "0"))
+            payload = self.rfile.read(content_length)
+            return cgi.FieldStorage(
+                fp=io.BytesIO(payload),
+                headers=self.headers,
+                environ={
+                    "REQUEST_METHOD": "POST",
+                    "CONTENT_TYPE": self.headers.get("Content-Type", ""),
+                    "CONTENT_LENGTH": str(len(payload)),
+                },
+            )
+
+        def handle_api_upload_ask(self) -> None:
+            try:
+                form = self.parse_multipart()
+                upload_question = str(form.getfirst("upload_question", form.getfirst("question", ""))).strip()
+                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "extractive"))).strip()
+                file_item = form["custom_file"] if "custom_file" in form else form["file"] if "file" in form else None
+                if not upload_question:
+                    raise ValueError("question/upload_question is required")
+                if file_item is None or not getattr(file_item, "filename", ""):
+                    raise ValueError("file/custom_file is required")
+                filename = Path(file_item.filename).name
+                upload_docs = docs_from_uploaded_file(filename, file_item.file.read())
+                if not upload_docs:
+                    raise ValueError("No readable text extracted from uploaded file")
+                selected_mode, active_generator = self.choose_generator(runtime_mode)
+                custom_retriever = SimpleBM25(upload_docs)
+                upload_results = custom_retriever.search(upload_question, top_k=5)
+                upload_answer = active_generator.generate(upload_question, upload_results)
+                self.write_json(
+                    {
+                        "filename": filename,
+                        "indexed_chunks": len(upload_docs),
+                        "question": upload_question,
+                        "answer": upload_answer,
+                        "answer_engine": selected_mode,
+                        "sources": source_payload(upload_results),
+                    }
+                )
+            except Exception as exc:
+                self.write_json({"error": str(exc)}, status=400)
+
+        def handle_api_eval_upload(self) -> None:
+            try:
+                form = self.parse_multipart()
+                corpus_item = form["eval_corpus"] if "eval_corpus" in form else form["corpus"] if "corpus" in form else None
+                benchmark_item = (
+                    form["eval_benchmark"]
+                    if "eval_benchmark" in form
+                    else form["benchmark"]
+                    if "benchmark" in form
+                    else None
+                )
+                if corpus_item is None or not getattr(corpus_item, "filename", ""):
+                    raise ValueError("corpus/eval_corpus file is required")
+                if benchmark_item is None or not getattr(benchmark_item, "filename", ""):
+                    raise ValueError("benchmark/eval_benchmark file is required")
+                corpus_name = Path(corpus_item.filename).name
+                benchmark_name = Path(benchmark_item.filename).name
+                docs = docs_from_uploaded_file(corpus_name, corpus_item.file.read())
+                if not docs:
+                    raise ValueError("No readable documents extracted from corpus")
+                benchmark_rows = parse_benchmark_rows(benchmark_name, benchmark_item.file.read())
+                report = run_custom_benchmark(docs, benchmark_rows, generator)
+                self.write_json(
+                    {
+                        "corpus_file": corpus_name,
+                        "benchmark_file": benchmark_name,
+                        "indexed_chunks": len(docs),
+                        "report": report,
+                    }
+                )
+            except Exception as exc:
+                self.write_json({"error": str(exc)}, status=400)
 
         def handle_upload_ask(self) -> None:
             upload_question = ""

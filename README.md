@@ -49,6 +49,17 @@ ANSWER_MODE=guarded_causal
 GENERATION_MODEL=felinabulent/turkish-legal-qwen2-5-0-5b-rag-sft
 ```
 
+The Space also exposes programmatic endpoints for instructor testing:
+
+```text
+POST /api/ask
+POST /api/upload_ask
+POST /api/eval_upload
+```
+
+These endpoints return JSON and allow the instructor to upload a custom corpus
+and benchmark without using the browser UI.
+
 Run a submission-style Base RAG vs Fine-tuned RAG comparison after training or providing a fine-tuned reranker checkpoint:
 
 ```bash
