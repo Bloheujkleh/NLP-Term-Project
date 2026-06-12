@@ -48,7 +48,16 @@ The app does not require paid APIs and the default mode runs quickly on CPU.
 
 ## Instructor Custom Document Test
 
-The first screen is focused on instructor-provided data:
+The first screen is focused on instructor-provided data. The simplest flow is:
+
+1. Upload a single dataset `.zip`, `.json`, or `.jsonl`.
+2. Click **Run Dataset**.
+3. The app tries to extract documents and benchmark questions automatically and returns metrics plus sample answers.
+
+For a `.zip`, include document files and/or JSON/JSONL files such as `corpus.jsonl`,
+`documents.json`, `benchmark.json`, or `questions.jsonl`.
+
+Manual question flow:
 
 1. Upload a `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, `.pdf`, or `.zip` file.
    A `.zip` file can contain a document collection with multiple supported files.
@@ -91,6 +100,13 @@ Run a custom benchmark:
 curl -X POST "$SPACE_URL/api/eval_upload" \
   -F "corpus=@custom_docs.zip" \
   -F "benchmark=@benchmark.json"
+```
+
+Run a one-file dataset evaluation:
+
+```bash
+curl -X POST "$SPACE_URL/api/dataset_eval" \
+  -F "file=@dataset.zip"
 ```
 
 The API returns JSON with the answer, selected answer engine, retrieved sources,

@@ -55,6 +55,7 @@ The Space also exposes programmatic endpoints for instructor testing:
 POST /api/ask
 POST /api/upload_ask
 POST /api/eval_upload
+POST /api/dataset_eval
 ```
 
 These endpoints return JSON and allow the instructor to upload a custom corpus

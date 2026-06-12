@@ -318,6 +318,49 @@ def parse_benchmark_rows(filename: str, payload: bytes) -> list[dict]:
     return [row for row in rows if isinstance(row, dict)]
 
 
+def looks_like_benchmark_row(row: dict) -> bool:
+    return bool(first_text(row.get("question"), row.get("query"), row.get("soru")))
+
+
+def split_dataset_upload(filename: str, payload: bytes) -> tuple[list[Doc], list[dict]]:
+    suffix = Path(filename).suffix.lower()
+    docs: list[Doc] = []
+    benchmark_rows: list[dict] = []
+    if suffix == ".zip":
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            for info in archive.infolist():
+                if info.is_dir() or info.file_size <= 0:
+                    continue
+                inner_name = Path(info.filename).name
+                if not inner_name or inner_name.startswith("."):
+                    continue
+                inner_suffix = Path(inner_name).suffix.lower()
+                if inner_suffix not in {".txt", ".md", ".csv", ".json", ".jsonl", ".docx", ".pdf"}:
+                    continue
+                inner_payload = archive.read(info)
+                if inner_suffix in {".json", ".jsonl"}:
+                    docs.extend(docs_from_structured_rows(inner_name, inner_payload))
+                    try:
+                        rows = parse_benchmark_rows(inner_name, inner_payload)
+                        benchmark_rows.extend(row for row in rows if looks_like_benchmark_row(row))
+                    except Exception:
+                        pass
+                else:
+                    docs.extend(docs_from_uploaded_file(inner_name, inner_payload))
+        return docs, benchmark_rows
+
+    if suffix in {".json", ".jsonl"}:
+        docs.extend(docs_from_structured_rows(filename, payload))
+        try:
+            rows = parse_benchmark_rows(filename, payload)
+            benchmark_rows.extend(row for row in rows if looks_like_benchmark_row(row))
+        except Exception:
+            pass
+        return docs, benchmark_rows
+
+    return docs_from_uploaded_file(filename, payload), []
+
+
 def run_custom_benchmark(docs: list[Doc], benchmark_rows: list[dict], generator: AnswerGenerator, limit: int = 200) -> str:
     retriever = SimpleBM25(docs)
     rows = benchmark_rows[:limit]
@@ -696,6 +739,7 @@ def page(
     upload_results: list[tuple[Doc, float]] | None = None,
     upload_message: str = "",
     eval_report: str = "",
+    dataset_report: str = "",
 ) -> bytes:
     results = results or []
     upload_results = upload_results or []
@@ -753,7 +797,16 @@ def page(
       <strong>Default engine:</strong> Fast source-grounded extractive{model_line}
     </section>
     <section class="panel">
-      <h2>1. Upload Document Collection and Ask</h2>
+      <h2>Upload Dataset and Get Results</h2>
+      <form method="post" action="/dataset_eval" enctype="multipart/form-data">
+        <label for="dataset_file"><strong>Dataset file</strong> (.zip/.json/.jsonl with documents and benchmark questions)</label>
+        <input id="dataset_file" name="dataset_file" type="file" accept=".zip,.json,.jsonl,.txt,.md,.csv,.docx,.pdf">
+        <div class="actions"><button type="submit">Run Dataset</button></div>
+      </form>
+      {f'<h3>Dataset Results</h3><pre>{html.escape(dataset_report)}</pre>' if dataset_report else ''}
+    </section>
+    <section class="panel">
+      <h2>Optional: Ask One Question</h2>
       <form method="post" action="/upload_ask" enctype="multipart/form-data">
         <label for="custom_file"><strong>Upload file or ZIP collection</strong></label>
         <input id="custom_file" name="custom_file" type="file" accept=".zip,.txt,.md,.csv,.json,.jsonl,.docx,.pdf">
@@ -771,7 +824,7 @@ def page(
     {f'<section class="panel"><h2>Answer</h2><pre>{html.escape(upload_answer)}</pre></section>' if upload_answer else ''}
     {f'<section><h2>Retrieved Sources</h2>{upload_source_cards}</section>' if upload_results else ''}
     <section class="panel">
-      <h2>2. Upload Corpus and Benchmark</h2>
+      <h2>Optional: Separate Corpus and Benchmark</h2>
       <form method="post" action="/eval_upload" enctype="multipart/form-data">
         <label for="eval_corpus"><strong>Corpus / document collection</strong></label>
         <input id="eval_corpus" name="eval_corpus" type="file" accept=".zip,.txt,.md,.csv,.json,.jsonl,.docx,.pdf">
@@ -824,6 +877,12 @@ def build_handler(
                 return
             if self.path == "/api/eval_upload":
                 self.handle_api_eval_upload()
+                return
+            if self.path == "/api/dataset_eval":
+                self.handle_api_dataset_eval()
+                return
+            if self.path == "/dataset_eval":
+                self.handle_dataset_eval()
                 return
             if self.path == "/upload_ask":
                 self.handle_upload_ask()
@@ -956,6 +1015,62 @@ def build_handler(
                 )
             except Exception as exc:
                 self.write_json({"error": str(exc)}, status=400)
+
+        def handle_api_dataset_eval(self) -> None:
+            try:
+                form = self.parse_multipart()
+                dataset_item = form["dataset_file"] if "dataset_file" in form else form["dataset"] if "dataset" in form else form["file"] if "file" in form else None
+                if dataset_item is None or not getattr(dataset_item, "filename", ""):
+                    raise ValueError("dataset_file/dataset/file is required")
+                dataset_name = Path(dataset_item.filename).name
+                docs, benchmark_rows = split_dataset_upload(dataset_name, dataset_item.file.read())
+                if not docs:
+                    raise ValueError("No readable documents found in dataset")
+                if not benchmark_rows:
+                    raise ValueError("No benchmark questions found in dataset")
+                report = run_custom_benchmark(docs, benchmark_rows, generator)
+                self.write_json(
+                    {
+                        "dataset_file": dataset_name,
+                        "indexed_chunks": len(docs),
+                        "benchmark_questions": len(benchmark_rows),
+                        "report": report,
+                    }
+                )
+            except Exception as exc:
+                self.write_json({"error": str(exc)}, status=400)
+
+        def handle_dataset_eval(self) -> None:
+            dataset_report = ""
+            try:
+                form = self.parse_multipart()
+                dataset_item = form["dataset_file"] if "dataset_file" in form else None
+                if dataset_item is None or not getattr(dataset_item, "filename", ""):
+                    raise ValueError("Lutfen dataset .zip/.json/.jsonl dosyasi yukleyin.")
+                dataset_name = Path(dataset_item.filename).name
+                docs, benchmark_rows = split_dataset_upload(dataset_name, dataset_item.file.read())
+                if not docs:
+                    raise ValueError("Dataset icinde okunabilir dokuman bulunamadi.")
+                if not benchmark_rows:
+                    raise ValueError("Dataset icinde benchmark question/query bulunamadi.")
+                dataset_report = (
+                    f"Dataset file: {dataset_name}\n"
+                    f"Indexed chunks/documents: {len(docs)}\n"
+                    f"Benchmark questions: {len(benchmark_rows)}\n\n"
+                    + run_custom_benchmark(docs, benchmark_rows, generator)
+                )
+            except Exception as exc:
+                dataset_report = f"Dataset error: {exc}"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(
+                page(
+                    answer_mode=answer_mode,
+                    generation_model=generation_model,
+                    dataset_report=dataset_report,
+                )
+            )
 
         def handle_upload_ask(self) -> None:
             upload_question = ""
