@@ -511,9 +511,13 @@ class ExtractiveGenerator(AnswerGenerator):
         text = re.sub(r"\s+", " ", doc.text).strip()
         title = re.sub(r"\s+", " ", doc.title).strip()
         if title and text.lower().startswith(title.lower()):
-            text = text[len(title):].lstrip(" :-–—\t")
+            remainder = text[len(title):]
+            if not remainder or re.match(r"^\s*[:\-\u2013\u2014]\s+", remainder):
+                text = remainder.lstrip(" :-\u2013\u2014\t")
         if title.endswith("?") and text.lower().startswith(title[:-1].lower()):
-            text = text[len(title) - 1 :].lstrip(" ?:-–—\t")
+            remainder = text[len(title) - 1 :]
+            if not remainder or re.match(r"^\s*[\?:\-\u2013\u2014]\s+", remainder):
+                text = remainder.lstrip(" ?:-\u2013\u2014\t")
         return text or doc.text
 
     @staticmethod
@@ -795,12 +799,18 @@ def page(
   <main>
     <section class="panel">
       <strong>Default engine:</strong> Fine-tuned Qwen LLM with source-grounded fallback{model_line}
+      <p class="muted">For large custom datasets, the Qwen engine can take longer. If the Space times out or the benchmark is very large, choose the fast extractive engine below; it uses the same retrieved sources and citations without free-form generation.</p>
     </section>
     <section class="panel">
       <h2>Upload Dataset and Get Results</h2>
       <form method="post" action="/dataset_eval" enctype="multipart/form-data">
         <label for="dataset_file"><strong>Dataset file</strong> (.zip/.json/.jsonl with documents and benchmark questions)</label>
         <input id="dataset_file" name="dataset_file" type="file" accept=".zip,.json,.jsonl,.txt,.md,.csv,.docx,.pdf">
+        <label for="dataset_runtime_mode"><strong>Answer engine</strong></label>
+        <select id="dataset_runtime_mode" name="runtime_mode">
+          <option value="guarded_causal" {llm_selected}>Fine-tuned Qwen LLM (default, slower)</option>
+          <option value="extractive" {extractive_selected}>Fast source-grounded extractive</option>
+        </select>
         <div class="actions"><button type="submit">Run Dataset</button></div>
       </form>
       {f'<h3>Dataset Results</h3><pre>{html.escape(dataset_report)}</pre>' if dataset_report else ''}
@@ -830,6 +840,11 @@ def page(
         <input id="eval_corpus" name="eval_corpus" type="file" accept=".zip,.txt,.md,.csv,.json,.jsonl,.docx,.pdf">
         <label for="eval_benchmark"><strong>Benchmark</strong> (.json/.jsonl/.zip with question, answer/gold_answer, source_id/relevant_documents)</label>
         <input id="eval_benchmark" name="eval_benchmark" type="file" accept=".json,.jsonl,.zip">
+        <label for="eval_runtime_mode"><strong>Answer engine</strong></label>
+        <select id="eval_runtime_mode" name="runtime_mode">
+          <option value="guarded_causal" {llm_selected}>Fine-tuned Qwen LLM (default, slower)</option>
+          <option value="extractive" {extractive_selected}>Fast source-grounded extractive</option>
+        </select>
         <div class="actions"><button type="submit">Run Benchmark</button></div>
       </form>
       {f'<h3>Benchmark Results</h3><pre>{html.escape(eval_report)}</pre>' if eval_report else ''}
@@ -986,6 +1001,7 @@ def build_handler(
         def handle_api_eval_upload(self) -> None:
             try:
                 form = self.parse_multipart()
+                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "guarded_causal"))).strip()
                 corpus_item = form["eval_corpus"] if "eval_corpus" in form else form["corpus"] if "corpus" in form else None
                 benchmark_item = (
                     form["eval_benchmark"]
@@ -1004,7 +1020,7 @@ def build_handler(
                 if not docs:
                     raise ValueError("No readable documents extracted from corpus")
                 benchmark_rows = parse_benchmark_rows(benchmark_name, benchmark_item.file.read())
-                selected_mode, active_generator = self.choose_generator("guarded_causal")
+                selected_mode, active_generator = self.choose_generator(runtime_mode)
                 report = run_custom_benchmark(docs, benchmark_rows, active_generator)
                 self.write_json(
                     {
@@ -1021,6 +1037,7 @@ def build_handler(
         def handle_api_dataset_eval(self) -> None:
             try:
                 form = self.parse_multipart()
+                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "guarded_causal"))).strip()
                 dataset_item = form["dataset_file"] if "dataset_file" in form else form["dataset"] if "dataset" in form else form["file"] if "file" in form else None
                 if dataset_item is None or not getattr(dataset_item, "filename", ""):
                     raise ValueError("dataset_file/dataset/file is required")
@@ -1030,7 +1047,7 @@ def build_handler(
                     raise ValueError("No readable documents found in dataset")
                 if not benchmark_rows:
                     raise ValueError("No benchmark questions found in dataset")
-                selected_mode, active_generator = self.choose_generator("guarded_causal")
+                selected_mode, active_generator = self.choose_generator(runtime_mode)
                 report = run_custom_benchmark(docs, benchmark_rows, active_generator)
                 self.write_json(
                     {
@@ -1046,8 +1063,11 @@ def build_handler(
 
         def handle_dataset_eval(self) -> None:
             dataset_report = ""
+            selected_mode = "guarded_causal"
             try:
                 form = self.parse_multipart()
+                runtime_mode = str(form.getfirst("runtime_mode", "guarded_causal")).strip()
+                selected_mode, active_generator = self.choose_generator(runtime_mode)
                 dataset_item = form["dataset_file"] if "dataset_file" in form else None
                 if dataset_item is None or not getattr(dataset_item, "filename", ""):
                     raise ValueError("Lutfen dataset .zip/.json/.jsonl dosyasi yukleyin.")
@@ -1061,8 +1081,8 @@ def build_handler(
                     f"Dataset file: {dataset_name}\n"
                     f"Indexed chunks/documents: {len(docs)}\n"
                     f"Benchmark questions: {len(benchmark_rows)}\n\n"
-                    f"Answer engine: fine-tuned Qwen LLM with guarded extractive fallback\n\n"
-                    + run_custom_benchmark(docs, benchmark_rows, self.choose_generator("guarded_causal")[1])
+                    f"Answer engine: {selected_mode}\n\n"
+                    + run_custom_benchmark(docs, benchmark_rows, active_generator)
                 )
             except Exception as exc:
                 dataset_report = f"Dataset error: {exc}"
@@ -1073,6 +1093,7 @@ def build_handler(
                 page(
                     answer_mode=answer_mode,
                     generation_model=generation_model,
+                    selected_runtime_mode=selected_mode,
                     dataset_report=dataset_report,
                 )
             )
@@ -1133,6 +1154,7 @@ def build_handler(
 
         def handle_eval_upload(self) -> None:
             eval_report = ""
+            selected_mode = "guarded_causal"
             try:
                 content_length = int(self.headers.get("Content-Length", "0"))
                 payload = self.rfile.read(content_length)
@@ -1145,6 +1167,8 @@ def build_handler(
                         "CONTENT_LENGTH": str(len(payload)),
                     },
                 )
+                runtime_mode = str(form.getfirst("runtime_mode", "guarded_causal")).strip()
+                selected_mode, active_generator = self.choose_generator(runtime_mode)
                 corpus_item = form["eval_corpus"] if "eval_corpus" in form else None
                 benchmark_item = form["eval_benchmark"] if "eval_benchmark" in form else None
                 if corpus_item is None or not getattr(corpus_item, "filename", ""):
@@ -1157,8 +1181,8 @@ def build_handler(
                 if not docs:
                     raise ValueError("Corpus dosyasindan okunabilir dokuman cikarilamadi.")
                 benchmark_rows = parse_benchmark_rows(benchmark_name, benchmark_item.file.read())
-                eval_report = run_custom_benchmark(docs, benchmark_rows, self.choose_generator("guarded_causal")[1])
-                eval_report = f"Corpus documents/chunks: {len(docs)}\nBenchmark file: {benchmark_name}\n\n{eval_report}"
+                eval_report = run_custom_benchmark(docs, benchmark_rows, active_generator)
+                eval_report = f"Corpus documents/chunks: {len(docs)}\nBenchmark file: {benchmark_name}\nAnswer engine: {selected_mode}\n\n{eval_report}"
             except Exception as exc:
                 eval_report = f"Evaluation error: {exc}"
 
@@ -1169,6 +1193,7 @@ def build_handler(
                 page(
                     answer_mode=answer_mode,
                     generation_model=generation_model,
+                    selected_runtime_mode=selected_mode,
                     eval_report=eval_report,
                 )
             )

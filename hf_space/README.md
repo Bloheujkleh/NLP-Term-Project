@@ -17,7 +17,7 @@ This Space runs the deployment version of the Turkish Legal RAG project.
 ```text
 Question
 -> BM25 retrieval over Turkish legal corpus
--> source-grounded extractive answer by default
+-> guarded fine-tuned Qwen answer by default, with source-grounded extractive fallback
 -> citation / retrieved sources
 ```
 
