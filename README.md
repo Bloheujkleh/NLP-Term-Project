@@ -40,9 +40,9 @@ python scripts/demo_app.py --data-dir data
 
 The browser demo also includes a `Custom Document Test` panel. An instructor can upload a `.txt`, `.md`, `.csv`, `.json`, `.jsonl`, `.docx`, `.pdf`, or `.zip` file, ask a question over that uploaded file or document collection, and inspect the retrieved chunks/citations in the same page.
 
-The hosted Hugging Face Space defaults to the fast and robust extractive mode for
-custom-data testing. The fine-tuned Qwen model is available as an optional
-guarded generation mode through Space environment variables:
+The hosted Hugging Face Space defaults to the fine-tuned Qwen guarded LLM mode
+for custom-data testing. The generated answer is checked against retrieved
+sources and falls back to extractive source-grounded answering when needed:
 
 ```text
 ANSWER_MODE=guarded_causal

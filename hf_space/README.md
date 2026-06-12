@@ -21,11 +21,11 @@ Question
 -> citation / retrieved sources
 ```
 
-The default hosted mode is `ANSWER_MODE=extractive` because it is fast on CPU,
-auditable, and robust for instructor-provided custom documents. The fine-tuned
-LLM is still available from the web UI through the **Answer engine** selector
-as `Fine-tuned Qwen LLM (slower, guarded fallback)`. It can also be enabled as
-the default guarded generation mode with:
+The default hosted mode is `ANSWER_MODE=guarded_causal`, which uses the
+fine-tuned Qwen LLM first and falls back to the extractive source-grounded answer
+when the generated answer is too short, missing citation, or weakly supported.
+The faster extractive engine remains available from the web UI through the
+**Answer engine** selector.
 
 ```text
 ANSWER_MODE=guarded_causal

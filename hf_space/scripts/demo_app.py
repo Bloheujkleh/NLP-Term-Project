@@ -733,7 +733,7 @@ def page(
     results: list[tuple[Doc, float]] | None = None,
     answer_mode: str = "extractive",
     generation_model: str | None = None,
-    selected_runtime_mode: str = "extractive",
+    selected_runtime_mode: str = "guarded_causal",
     upload_question: str = "",
     upload_answer: str = "",
     upload_results: list[tuple[Doc, float]] | None = None,
@@ -794,7 +794,7 @@ def page(
   </header>
   <main>
     <section class="panel">
-      <strong>Default engine:</strong> Fast source-grounded extractive{model_line}
+      <strong>Default engine:</strong> Fine-tuned Qwen LLM with source-grounded fallback{model_line}
     </section>
     <section class="panel">
       <h2>Upload Dataset and Get Results</h2>
@@ -894,7 +894,7 @@ def build_handler(
             payload = self.rfile.read(length).decode("utf-8")
             parsed = parse_qs(payload)
             question = parsed.get("question", [""])[0].strip()
-            runtime_mode = parsed.get("runtime_mode", ["extractive"])[0].strip()
+            runtime_mode = parsed.get("runtime_mode", ["guarded_causal"])[0].strip()
             selected_mode, active_generator = self.choose_generator(runtime_mode)
             results = retriever.search(question, top_k=5) if question else []
             answer = active_generator.generate(question, results) if question else ""
@@ -922,7 +922,7 @@ def build_handler(
                     parsed = parse_qs(raw)
                     data = {key: values[0] for key, values in parsed.items()}
                 question = str(data.get("question") or data.get("query") or "").strip()
-                runtime_mode = str(data.get("runtime_mode") or data.get("answer_engine") or "extractive").strip()
+                runtime_mode = str(data.get("runtime_mode") or data.get("answer_engine") or "guarded_causal").strip()
                 if not question:
                     raise ValueError("question is required")
                 selected_mode, active_generator = self.choose_generator(runtime_mode)
@@ -956,7 +956,7 @@ def build_handler(
             try:
                 form = self.parse_multipart()
                 upload_question = str(form.getfirst("upload_question", form.getfirst("question", ""))).strip()
-                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "extractive"))).strip()
+                runtime_mode = str(form.getfirst("runtime_mode", form.getfirst("answer_engine", "guarded_causal"))).strip()
                 file_item = form["custom_file"] if "custom_file" in form else form["file"] if "file" in form else None
                 if not upload_question:
                     raise ValueError("question/upload_question is required")
@@ -1004,12 +1004,14 @@ def build_handler(
                 if not docs:
                     raise ValueError("No readable documents extracted from corpus")
                 benchmark_rows = parse_benchmark_rows(benchmark_name, benchmark_item.file.read())
-                report = run_custom_benchmark(docs, benchmark_rows, generator)
+                selected_mode, active_generator = self.choose_generator("guarded_causal")
+                report = run_custom_benchmark(docs, benchmark_rows, active_generator)
                 self.write_json(
                     {
                         "corpus_file": corpus_name,
                         "benchmark_file": benchmark_name,
                         "indexed_chunks": len(docs),
+                        "answer_engine": selected_mode,
                         "report": report,
                     }
                 )
@@ -1028,12 +1030,14 @@ def build_handler(
                     raise ValueError("No readable documents found in dataset")
                 if not benchmark_rows:
                     raise ValueError("No benchmark questions found in dataset")
-                report = run_custom_benchmark(docs, benchmark_rows, generator)
+                selected_mode, active_generator = self.choose_generator("guarded_causal")
+                report = run_custom_benchmark(docs, benchmark_rows, active_generator)
                 self.write_json(
                     {
                         "dataset_file": dataset_name,
                         "indexed_chunks": len(docs),
                         "benchmark_questions": len(benchmark_rows),
+                        "answer_engine": selected_mode,
                         "report": report,
                     }
                 )
@@ -1057,7 +1061,8 @@ def build_handler(
                     f"Dataset file: {dataset_name}\n"
                     f"Indexed chunks/documents: {len(docs)}\n"
                     f"Benchmark questions: {len(benchmark_rows)}\n\n"
-                    + run_custom_benchmark(docs, benchmark_rows, generator)
+                    f"Answer engine: fine-tuned Qwen LLM with guarded extractive fallback\n\n"
+                    + run_custom_benchmark(docs, benchmark_rows, self.choose_generator("guarded_causal")[1])
                 )
             except Exception as exc:
                 dataset_report = f"Dataset error: {exc}"
@@ -1091,7 +1096,7 @@ def build_handler(
                     },
                 )
                 upload_question = str(form.getfirst("upload_question", "")).strip()
-                runtime_mode = str(form.getfirst("runtime_mode", "extractive")).strip()
+                runtime_mode = str(form.getfirst("runtime_mode", "guarded_causal")).strip()
                 selected_mode, active_generator = self.choose_generator(runtime_mode)
                 file_item = form["custom_file"] if "custom_file" in form else None
                 if not upload_question:
@@ -1152,7 +1157,7 @@ def build_handler(
                 if not docs:
                     raise ValueError("Corpus dosyasindan okunabilir dokuman cikarilamadi.")
                 benchmark_rows = parse_benchmark_rows(benchmark_name, benchmark_item.file.read())
-                eval_report = run_custom_benchmark(docs, benchmark_rows, generator)
+                eval_report = run_custom_benchmark(docs, benchmark_rows, self.choose_generator("guarded_causal")[1])
                 eval_report = f"Corpus documents/chunks: {len(docs)}\nBenchmark file: {benchmark_name}\n\n{eval_report}"
             except Exception as exc:
                 eval_report = f"Evaluation error: {exc}"
